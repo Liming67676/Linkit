@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="org.hang.shortlink.project.mapper.LinkMapper">
+
+    <!-- 根据分组标识查询该分组下所有有效的短链接 -->
+    <select id="selectFullShortUrlsByGid" resultType="java.lang.String">
+        SELECT full_short_url
+        FROM t_link
+        WHERE gid = #{gid}
+          AND del_flag = 0
+          AND enable_status = 0
+    </select>
+
+</mapper>

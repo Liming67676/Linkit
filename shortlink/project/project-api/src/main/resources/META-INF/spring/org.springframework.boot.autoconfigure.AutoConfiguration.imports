@@ -1,0 +1,2 @@
+org.hang.shortlink.project.api.config.FallBackConfig
+org.hang.shortlink.project.api.config.FeignAutoConfiguration

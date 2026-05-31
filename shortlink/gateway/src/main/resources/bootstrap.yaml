@@ -1,0 +1,17 @@
+spring:
+  application:
+    name: shortlink-gateway
+  profiles:
+    active: local
+  cloud:
+    nacos:
+      server-addr: ${cloud.nacos.server-addr}
+      discovery:
+        namespace: ${cloud.nacos.discovery.namespace}
+      config:
+        namespace: ${cloud.nacos.config.namespace}
+        file-extension: yaml
+        shared-configs:
+          - data-id: redis-shared.yaml
+          - data-id: short-link-jwt.yaml
+          - data-id: short-link-gateway-interceptor.yaml

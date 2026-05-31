@@ -1,0 +1,20 @@
+server:
+  port: 8002
+
+spring:
+  datasource:
+    driver-class-name: org.apache.shardingsphere.driver.ShardingSphereDriver
+    url: ${spring.datasource.url}
+
+mybatis-plus:
+  global-config:
+    db-config:
+      logic-delete-field: delFlag
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  group-configs:
+    - group: 'project-service'
+      paths-to-match: '/**'
+      packages-to-scan: org.hang.shortlink.project

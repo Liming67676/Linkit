@@ -1,0 +1,156 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="org.hang.shortlink.project.mapper.LinkAccessLogStatsMapper">
+
+    <!-- 查询高频访问IP Top10 -->
+    <select id="selectTopIpStats" resultType="java.util.Map">
+        SELECT
+            ip,
+            COUNT(1) AS cnt
+        FROM t_link_access_log_stats
+        WHERE full_short_url = #{fullShortUrl}
+          AND create_time &gt;= #{start}
+          AND create_time &lt;= DATE_ADD(#{end}, INTERVAL 1 DAY)
+          -- 优化：强制热数据，只查30天内（可修改7/15天）
+          AND create_time &gt;= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
+          AND ip != 'unknown'
+          AND ip IS NOT NULL
+        GROUP BY ip
+        ORDER BY cnt DESC
+        LIMIT 10
+    </select>
+
+    <!-- 基于时间段动态判断新老访客统计（按独立IP去重） -->
+    <!-- 新用户：在查询时段内有访问，且之前从未访问过的独立IP -->
+    <!-- 老用户：在查询时段内有访问，且在查询开始前有过访问记录的独立IP -->
+    <select id="findUvTypeCntByShortLink" resultType="java.util.Map">
+        SELECT
+            COUNT(DISTINCT CASE WHEN pre.ip IS NULL THEN cur.ip END) AS newUserCnt,
+            COUNT(DISTINCT CASE WHEN pre.ip IS NOT NULL THEN cur.ip END) AS oldUserCnt
+        FROM (
+            SELECT DISTINCT ip
+            FROM t_link_access_log_stats
+            WHERE full_short_url = #{fullShortUrl}
+              AND create_time >= #{start}
+              AND create_time <![CDATA[ <= ]]> DATE_ADD(#{end}, INTERVAL 1 DAY)
+        ) cur
+        LEFT JOIN (
+            SELECT DISTINCT ip
+            FROM t_link_access_log_stats
+            WHERE full_short_url = #{fullShortUrl}
+              AND create_time &lt; #{start}
+        ) pre ON cur.ip = pre.ip
+    </select>
+
+    <!-- 批量查询高频访问IP Top10 -->
+    <select id="selectTopIpStatsBatch" resultType="java.util.Map">
+        SELECT
+        ip,
+        COUNT(1) AS cnt
+        FROM t_link_access_log_stats
+        WHERE
+        <!-- 优化1：空集合安全，防止IN()语法错误 -->
+        <if test="fullShortUrls != null and fullShortUrls.size() > 0">
+            full_short_url IN
+            <foreach collection="fullShortUrls" item="url" open="(" separator="," close=")">
+                #{url}
+            </foreach>
+        </if>
+        <if test="fullShortUrls == null or fullShortUrls.size() == 0">
+            AND 1=0
+        </if>
+        -- 优化2：修复索引失效
+        AND create_time &gt;= #{start}
+        AND create_time &lt;= DATE_ADD(#{end}, INTERVAL 1 DAY)
+        -- 优化3：强制热数据
+        AND create_time &gt;= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
+        AND ip != 'unknown'
+        AND ip IS NOT NULL
+        GROUP BY ip
+        ORDER BY cnt DESC
+        LIMIT 10
+    </select>
+
+    <!-- 批量查询新老访客统计（基于时间段动态判断，按独立IP去重） -->
+    <select id="findUvTypeCntByShortLinks" resultType="java.util.Map">
+        SELECT
+            COUNT(DISTINCT CASE WHEN pre.ip IS NULL THEN cur.ip END) AS newUserCnt,
+            COUNT(DISTINCT CASE WHEN pre.ip IS NOT NULL THEN cur.ip END) AS oldUserCnt
+        FROM (
+            SELECT DISTINCT ip
+            FROM t_link_access_log_stats
+            WHERE
+            <if test="fullShortUrls != null and fullShortUrls.size() > 0">
+                full_short_url IN
+                <foreach collection="fullShortUrls" item="url" open="(" separator="," close=")">
+                    #{url}
+                </foreach>
+            </if>
+            <if test="fullShortUrls == null or fullShortUrls.size() == 0">
+                1=0
+            </if>
+              AND create_time >= #{start}
+              AND create_time <![CDATA[ <= ]]> DATE_ADD(#{end}, INTERVAL 1 DAY)
+        ) cur
+        LEFT JOIN (
+            SELECT DISTINCT ip
+            FROM t_link_access_log_stats
+            WHERE
+            <if test="fullShortUrls != null and fullShortUrls.size() > 0">
+                full_short_url IN
+                <foreach collection="fullShortUrls" item="url" open="(" separator="," close=")">
+                    #{url}
+                </foreach>
+            </if>
+            <if test="fullShortUrls == null or fullShortUrls.size() == 0">
+                1=0
+            </if>
+              AND create_time &lt; #{start}
+        ) pre ON cur.ip = pre.ip
+    </select>
+
+
+    <!-- 分页查询访问记录（MySQL分页插件自动处理，无LIMIT） -->
+    <select id="selectAccessRecordPage" resultType="org.hang.shortlink.project.pojo.po.LinkAccessLogStats">
+        SELECT *
+        FROM t_link_access_log_stats
+        WHERE
+        <if test="fullShortUrls != null and fullShortUrls.size() > 0">
+            full_short_url IN
+            <foreach collection="fullShortUrls" item="url" open="(" separator="," close=")">
+                #{url}
+            </foreach>
+        </if>
+        <if test="fullShortUrls == null or fullShortUrls.size() == 0">
+            1=0
+        </if>
+        -- 时间范围 + 热数据过滤
+        AND create_time &gt;= #{start}
+        AND create_time &lt;= DATE_ADD(#{end}, INTERVAL 1 DAY)
+        AND create_time &gt;= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
+        ORDER BY create_time DESC
+    </select>
+
+    <!-- 批量查询指定IP在查询开始前是否有历史访问记录 -->
+    <select id="selectExistingIpsBeforeDate" resultType="java.lang.String">
+        SELECT DISTINCT ip
+        FROM t_link_access_log_stats
+        WHERE
+        <if test="fullShortUrls != null and fullShortUrls.size() > 0">
+            full_short_url IN
+            <foreach collection="fullShortUrls" item="url" open="(" separator="," close=")">
+                #{url}
+            </foreach>
+        </if>
+        <if test="fullShortUrls == null or fullShortUrls.size() == 0">
+            1=0
+        </if>
+          AND ip IN
+          <foreach collection="ips" item="ip" open="(" separator="," close=")">
+              #{ip}
+          </foreach>
+          AND create_time &lt; #{start}
+        LIMIT 1000
+    </select>
+
+</mapper>

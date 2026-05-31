@@ -1,0 +1,30 @@
+server:
+  port: 8000
+
+spring:
+  cloud:
+    gateway:
+      globalcors:
+        cors-configurations:
+          '[/**]':
+            allowedOrigins:
+              - https://admin.lnko.cn
+              - http://localhost:5173
+            allowedMethods:
+              - GET
+              - POST
+              - PUT
+              - DELETE
+              - OPTIONS
+            allowedHeaders: "*"
+            allowCredentials: true
+            maxAge: 3600
+      routes:
+        - id: admin-server
+          uri: lb://shortlink-admin-service
+          predicates:
+            - Path=/api/short-link/admin/v1/**
+        - id: project-server
+          uri: lb://shortlink-project-service
+          predicates:
+            - Path=/api/short-link/v1/**,/api/short-link/**

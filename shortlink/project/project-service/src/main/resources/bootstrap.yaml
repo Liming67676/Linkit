@@ -1,0 +1,21 @@
+spring:
+  application:
+    name: shortlink-project-service
+  profiles:
+    active: local
+  cloud:
+    nacos:
+      server-addr: ${cloud.nacos.server-addr}
+      discovery:
+        namespace: ${cloud.nacos.discovery.namespace}
+      config:
+        namespace: ${cloud.nacos.config.namespace}
+        file-extension: yaml
+        shared-configs:
+          - data-id: redis-shared.yaml
+          - data-id: rabbitmq-conf.yaml
+        extension-configs:
+          - data-id: whitelist-domains.yaml
+            refresh: true
+          - data-id: short-link-gaode.yaml
+            refresh: true

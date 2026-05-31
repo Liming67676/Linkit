@@ -1,0 +1,145 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="org.hang.shortlink.project.mapper.LinkAccessStatsMapper">
+
+    <!-- 查询总PV/UV/UIP -->
+    <select id="selectTotalPvUvUip" resultType="java.util.Map">
+        SELECT
+            SUM(pv) AS total_pv,
+            SUM(uv) AS total_uv,
+            SUM(uip) AS total_uip
+        FROM t_link_access_stats
+        WHERE full_short_url = #{fullShortUrl}
+          AND date BETWEEN #{start} AND #{end}
+          AND del_flag = 0
+    </select>
+
+    <!-- 按日期分组统计（每日数据） -->
+    <select id="selectDailyStats" resultType="java.util.Map">
+        SELECT
+            date,
+            SUM(pv) AS pv,
+            SUM(uv) AS uv,
+            SUM(uip) AS uip
+        FROM t_link_access_stats
+        WHERE full_short_url = #{fullShortUrl}
+          AND date BETWEEN #{start} AND #{end}
+          AND del_flag = 0
+        GROUP BY date
+        ORDER BY date ASC
+    </select>
+
+    <!-- 按小时分组统计（0-23） -->
+    <select id="selectHourStats" resultType="java.util.Map">
+        SELECT
+            hour,
+            SUM(pv) AS pv
+        FROM t_link_access_stats
+        WHERE full_short_url = #{fullShortUrl}
+          AND date BETWEEN #{start} AND #{end}
+          AND del_flag = 0
+        GROUP BY hour
+        ORDER BY hour ASC
+    </select>
+
+    <!-- 按星期分组统计（0-6） -->
+    <select id="selectWeekdayStats" resultType="java.util.Map">
+        SELECT
+            weekday,
+            SUM(pv) AS pv
+        FROM t_link_access_stats
+        WHERE full_short_url = #{fullShortUrl}
+          AND date BETWEEN #{start} AND #{end}
+          AND del_flag = 0
+        GROUP BY weekday
+        ORDER BY weekday ASC
+    </select>
+
+    <!-- ========== 批量短链接统计方法 ========== -->
+    
+    <!-- 批量查询总PV/UV/UIP -->
+    <select id="selectTotalPvUvUipBatch" resultType="java.util.Map">
+        SELECT
+            SUM(pv) AS total_pv,
+            SUM(uv) AS total_uv,
+            SUM(uip) AS total_uip
+        FROM t_link_access_stats
+        WHERE full_short_url IN
+        <foreach collection="fullShortUrls" item="url" open="(" separator="," close=")">
+            #{url}
+        </foreach>
+          AND date BETWEEN #{start} AND #{end}
+          AND del_flag = 0
+    </select>
+
+    <!-- 批量按日期分组统计 -->
+    <select id="selectDailyStatsBatch" resultType="java.util.Map">
+        SELECT
+            date,
+            SUM(pv) AS pv,
+            SUM(uv) AS uv,
+            SUM(uip) AS uip
+        FROM t_link_access_stats
+        WHERE full_short_url IN
+        <foreach collection="fullShortUrls" item="url" open="(" separator="," close=")">
+            #{url}
+        </foreach>
+          AND date BETWEEN #{start} AND #{end}
+          AND del_flag = 0
+        GROUP BY date
+        ORDER BY date ASC
+    </select>
+
+    <!-- 批量按小时分组统计 -->
+    <select id="selectHourStatsBatch" resultType="java.util.Map">
+        SELECT
+            hour,
+            SUM(pv) AS pv
+        FROM t_link_access_stats
+        WHERE full_short_url IN
+        <foreach collection="fullShortUrls" item="url" open="(" separator="," close=")">
+            #{url}
+        </foreach>
+          AND date BETWEEN #{start} AND #{end}
+          AND del_flag = 0
+        GROUP BY hour
+        ORDER BY hour ASC
+    </select>
+
+    <!-- 批量按星期分组统计 -->
+    <select id="selectWeekdayStatsBatch" resultType="java.util.Map">
+        SELECT
+            weekday,
+            SUM(pv) AS pv
+        FROM t_link_access_stats
+        WHERE full_short_url IN
+        <foreach collection="fullShortUrls" item="url" open="(" separator="," close=")">
+            #{url}
+        </foreach>
+          AND date BETWEEN #{start} AND #{end}
+          AND del_flag = 0
+        GROUP BY weekday
+        ORDER BY weekday ASC
+    </select>
+
+    <!-- 批量查询每个短链接的总+今日PV/UV/UIP（分页使用） -->
+    <select id="selectPagePvUvUipStats" resultType="java.util.Map">
+        SELECT
+            full_short_url,
+            SUM(pv) AS total_pv,
+            SUM(uv) AS total_uv,
+            SUM(uip) AS total_uip,
+            SUM(CASE WHEN date = CURDATE() THEN pv ELSE 0 END) AS today_pv,
+            SUM(CASE WHEN date = CURDATE() THEN uv ELSE 0 END) AS today_uv,
+            SUM(CASE WHEN date = CURDATE() THEN uip ELSE 0 END) AS today_uip
+        FROM t_link_access_stats
+        WHERE #{gid}
+        AND full_short_url IN
+        <foreach collection="fullShortUrls" item="url" open="(" separator="," close=")">
+            #{url}
+        </foreach>
+          AND del_flag = 0
+        GROUP BY full_short_url
+    </select>
+
+</mapper>

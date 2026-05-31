@@ -1,0 +1,20 @@
+spring:
+  application:
+    name: shortlink-admin-service
+  profiles:
+    active: local
+  cloud:
+    nacos:
+      server-addr: ${cloud.nacos.server-addr}
+      discovery:
+        namespace: ${cloud.nacos.discovery.namespace}
+      config:
+        namespace: ${cloud.nacos.config.namespace}
+        file-extension: yaml
+        shared-configs:
+          - data-id: redis-shared.yaml
+          - data-id: short-link-jwt.yaml
+          - data-id: short-link-oss.yaml
+        extension-configs:
+          - data-id: rate.yaml
+            refresh: true

@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="org.hang.shortlink.project.mapper.LinkOsStatsMapper">
+
+    <!-- 单个短链接操作系统统计（含占比） -->
+    <select id="selectOsStatsWithRatio" resultType="java.util.Map">
+        SELECT
+            t1.os,
+            SUM(t1.cnt) AS total_cnt,
+            ROUND(SUM(t1.cnt) * 100.0 / IFNULL(MAX(t2.total_cnt), 1), 2) AS ratio_value
+        FROM t_link_os_stats t1
+        JOIN (
+            SELECT SUM(cnt) AS total_cnt
+            FROM t_link_os_stats
+            WHERE full_short_url = #{fullShortUrl}
+              AND date BETWEEN #{start} AND #{end}
+              AND del_flag = 0
+              AND os != '未知'
+        ) t2
+        WHERE t1.full_short_url = #{fullShortUrl}
+          AND t1.date BETWEEN #{start} AND #{end}
+          AND t1.del_flag = 0
+          AND t1.os != '未知'
+        GROUP BY t1.os
+        ORDER BY total_cnt DESC
+    </select>
+
+    <!-- 批量短链接操作系统统计（含占比） -->
+    <select id="selectOsStatsWithRatioBatch" resultType="java.util.Map">
+        SELECT
+            t1.os,
+            SUM(t1.cnt) AS total_cnt,
+            ROUND(SUM(t1.cnt) * 100.0 / IFNULL(MAX(t2.total_cnt), 1), 2) AS ratio_value
+        FROM t_link_os_stats t1
+        JOIN (
+            SELECT SUM(cnt) AS total_cnt
+            FROM t_link_os_stats
+            WHERE full_short_url IN
+            <foreach collection="fullShortUrls" item="url" open="(" separator="," close=")">
+                #{url}
+            </foreach>
+              AND date BETWEEN #{start} AND #{end}
+              AND del_flag = 0
+              AND os != '未知'
+        ) t2
+        WHERE t1.full_short_url IN
+        <foreach collection="fullShortUrls" item="url" open="(" separator="," close=")">
+            #{url}
+        </foreach>
+          AND t1.date BETWEEN #{start} AND #{end}
+          AND t1.del_flag = 0
+          AND t1.os != '未知'
+        GROUP BY t1.os
+        ORDER BY total_cnt DESC
+    </select>
+
+</mapper>

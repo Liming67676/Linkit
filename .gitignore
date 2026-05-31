@@ -1,0 +1,78 @@
+# Git metadata backups
+.git-backups/
+
+# Deployment artifacts and private server assets
+short-link部署/
+ssh.txt
+
+# IDE and OS files
+**/.idea/
+**/.vscode/
+.DS_Store
+Thumbs.db
+
+# Build outputs
+**/target/
+**/build/
+**/dist/
+**/dist-ssr/
+**/coverage/
+**/node_modules/
+**/*.log
+
+# Archives, certificates, private keys, packaged artifacts
+**/*.jar
+!shortlink/.mvn/wrapper/maven-wrapper.jar
+**/*.zip
+**/*.key
+**/*.pem
+**/*.crt
+**/*.csr
+**/*.p12
+**/*.jks
+**/Dump_*.csv
+
+# Local/private environment files
+**/.env.local
+**/.env.product
+**/.env.*.local
+**/*.local
+**/application-local.yml
+**/application-local.yaml
+**/application-product.yml
+**/application-product.yaml
+**/bootstrap-local.yml
+**/bootstrap-local.yaml
+**/bootstrap-product.yml
+**/bootstrap-product.yaml
+**/shardingsphere-local.yml
+**/shardingsphere-local.yaml
+**/shardingsphere-product.yml
+**/shardingsphere-product.yaml
+
+# Frontend test artifacts
+**/cypress/videos/
+**/cypress/screenshots/
+
+# Java IDE metadata
+**/*.iws
+**/*.iml
+**/*.ipr
+**/.apt_generated/
+**/.classpath
+**/.factorypath
+**/.project
+**/.settings/
+**/.springBeans
+**/.sts4-cache
+**/nbproject/private/
+**/nbbuild/
+**/nbdist/
+**/.nb-gradle/
+
+# Frontend package manager logs
+**/npm-debug.log*
+**/yarn-debug.log*
+**/yarn-error.log*
+**/pnpm-debug.log*
+**/lerna-debug.log*
