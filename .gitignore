@@ -12,12 +12,15 @@ ssh.txt
 Thumbs.db
 
 # Build outputs
+.maven-repo/
 **/target/
 **/build/
 **/dist/
 **/dist-ssr/
 **/coverage/
 **/node_modules/
+**/logs/
+/shortlink/logs/
 **/*.log
 
 # Archives, certificates, private keys, packaged artifacts
