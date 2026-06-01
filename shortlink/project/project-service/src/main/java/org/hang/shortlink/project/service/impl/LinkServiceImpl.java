@@ -39,7 +39,6 @@ import org.hang.shortlink.project.mq.dto.StatsMessage;
 import org.hang.shortlink.project.mq.producer.RabbitMQProducer;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
-import org.jsoup.nodes.Element;
 import org.redisson.api.RBloomFilter;
 import org.redisson.api.RLock;
 import org.redisson.api.RedissonClient;
@@ -80,6 +79,18 @@ public class LinkServiceImpl extends ServiceImpl<LinkMapper, Link> implements IL
     private static final String EMPTY_TITLE_CACHE_VALUE = "__EMPTY__";
 
     private static final String UNREACHABLE_TITLE_CACHE_VALUE = "__UNREACHABLE__";
+
+    private static final int FAVICON_FETCH_TIMEOUT_MS = 2000;
+
+    private static final int FAVICON_CHECK_TIMEOUT_MS = 1000;
+
+    private static final int FAVICON_MAX_BODY_SIZE = 256 * 1024;
+
+    private static final String FAVICON_CACHE_PREFIX = "short-link:favicon:";
+
+    private static final String DEFAULT_FAVICON_URL = "https://img.icons8.com/fluency/32/000000/link.png";
+
+    private static final long FAVICON_CACHE_TTL_SECONDS = 30L;
 
     private final ShortUrlGeneratorUtils shortUrlGeneratorUtils;
 
@@ -804,36 +815,94 @@ public class LinkServiceImpl extends ServiceImpl<LinkMapper, Link> implements IL
 
 
     public String getFaviconUrl(String url) {
-        // 空值校验
         if (url == null || url.isBlank()) {
-            return null;
+            return DEFAULT_FAVICON_URL;
         }
-
+        String cacheKey = null;
         try {
-            // 1. 配置 Jsoup 请求（模拟浏览器，防拦截）
-            Document document = Jsoup.connect(url)
-                    .userAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
-                    .timeout(10000)
-                    .ignoreHttpErrors(true)
-                    .followRedirects(true)
-                    .get();
-
-            // 2. 解析网页图标标签
-            Element faviconLink = document.selectFirst("link[rel~=(?i)(shortcut\\s+)?icon]");
-            if (faviconLink != null) {
-                String faviconUrl = faviconLink.attr("abs:href");
-                if (faviconUrl != null && !faviconUrl.isBlank()) {
+            String siteUrl = getSiteRootUrl(url);
+            cacheKey = FAVICON_CACHE_PREFIX + SecureUtil.md5(siteUrl);
+            String cachedFavicon = redisTemplate.opsForValue().get(cacheKey);
+            if (StringUtils.hasText(cachedFavicon)) {
+                return cachedFavicon;
+            }
+            URL targetUrl = new URL(siteUrl);
+            List<String> faviconCandidates = new ArrayList<>();
+            collectFaviconCandidatesFromHtml(siteUrl, faviconCandidates);
+            addFaviconCandidate(faviconCandidates, targetUrl.getProtocol() + "://" + targetUrl.getHost() + "/favicon.ico");
+            addFaviconCandidate(faviconCandidates, targetUrl.getProtocol() + "://" + targetUrl.getHost() + "/apple-touch-icon.png");
+            for (String faviconUrl : faviconCandidates) {
+                if (isValidFaviconUrl(faviconUrl)) {
+                    redisTemplate.opsForValue().set(cacheKey, faviconUrl, FAVICON_CACHE_TTL_SECONDS, TimeUnit.SECONDS);
                     return faviconUrl;
                 }
             }
-
-            // 3. 兜底方案：网站默认根目录图标（99%网站通用）
-            URL targetUrl = new URL(url);
-            return targetUrl.getProtocol() + "://" + targetUrl.getHost() + "/favicon.ico";
-
         } catch (Exception e) {
-            log.error("解析获取favicon失败,返回默认图标: {}", url, e);
-            return "https://img.icons8.com/fluency/32/000000/link.png";
+            log.warn("解析获取favicon失败,返回默认图标: {}", url, e);
+        }
+        if (StringUtils.hasText(cacheKey)) {
+            redisTemplate.opsForValue().set(cacheKey, DEFAULT_FAVICON_URL, FAVICON_CACHE_TTL_SECONDS, TimeUnit.SECONDS);
+        }
+        return DEFAULT_FAVICON_URL;
+    }
+
+    private String getSiteRootUrl(String url) throws IOException {
+        URL targetUrl = new URL(url);
+        int port = targetUrl.getPort();
+        String portPart = port > 0 ? ":" + port : "";
+        return targetUrl.getProtocol() + "://" + targetUrl.getHost() + portPart;
+    }
+
+    private void collectFaviconCandidatesFromHtml(String url, List<String> faviconCandidates) {
+        try {
+            Document document = Jsoup.connect(url)
+                    .userAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+                    .timeout(FAVICON_FETCH_TIMEOUT_MS)
+                    .maxBodySize(FAVICON_MAX_BODY_SIZE)
+                    .ignoreHttpErrors(true)
+                    .followRedirects(true)
+                    .get();
+            document.select("link[rel~=(?i)(shortcut\\s+icon|icon|apple-touch-icon|mask-icon)]")
+                    .forEach(element -> {
+                        String faviconUrl = element.attr("abs:href");
+                        addFaviconCandidate(faviconCandidates, faviconUrl);
+                    });
+        } catch (Exception e) {
+            log.warn("从HTML解析favicon候选失败, url={}, message={}", url, e.getMessage());
+        }
+    }
+
+    private void addFaviconCandidate(List<String> faviconCandidates, String faviconUrl) {
+        if (StringUtils.hasText(faviconUrl) && !faviconCandidates.contains(faviconUrl)) {
+            faviconCandidates.add(faviconUrl);
+        }
+    }
+
+    private boolean isValidFaviconUrl(String faviconUrl) {
+        if (!StringUtils.hasText(faviconUrl)) {
+            return false;
+        }
+        HttpURLConnection connection = null;
+        try {
+            connection = (HttpURLConnection) new URL(faviconUrl).openConnection();
+            connection.setRequestMethod("GET");
+            connection.setConnectTimeout(FAVICON_CHECK_TIMEOUT_MS);
+            connection.setReadTimeout(FAVICON_CHECK_TIMEOUT_MS);
+            connection.setInstanceFollowRedirects(true);
+            connection.setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36");
+            int status = connection.getResponseCode();
+            String contentType = connection.getContentType();
+            return status >= HttpURLConnection.HTTP_OK
+                    && status < HttpURLConnection.HTTP_BAD_REQUEST
+                    && StringUtils.hasText(contentType)
+                    && (contentType.startsWith("image/") || contentType.contains("icon"));
+        } catch (Exception e) {
+            log.debug("favicon候选不可用, url={}, message={}", faviconUrl, e.getMessage());
+            return false;
+        } finally {
+            if (connection != null) {
+                connection.disconnect();
+            }
         }
     }
 
