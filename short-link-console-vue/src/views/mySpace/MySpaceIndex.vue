@@ -107,7 +107,8 @@
         <!-- 表格 -->
         <el-table :data="tableData" height="calc(100vh - 280px)" style="width: 100%"
           :header-cell-style="{ background: '#fafbfc', color: '#606266', fontWeight: 600 }"
-          row-key="id" stripe>
+          :default-sort="{ prop: 'createTime', order: 'descending' }"
+          row-key="id" stripe @sort-change="handleSortChange">
           <template #empty>
             <div class="empty-state">
               <Link class="el-icon empty-icon" />
@@ -115,27 +116,13 @@
             </div>
           </template>
           <el-table-column type="selection" width="40" />
-          <el-table-column label="短链接信息" min-width="280">
-            <template #header>
-              <span
-                v-if="!isRecycleBin"
-                class="column-header sortable-header"
-                @click="toggleCreateTimeSort"
-              >
-                短链接信息
-                <span class="sort-arrows" :class="{ active: pageParams.orderTag === 'createTime' }">
-                  <CaretTop
-                    class="sort-arrow"
-                    :class="{ active: pageParams.orderTag === 'createTime' && pageParams.orderType === 'asc' }"
-                  />
-                  <CaretBottom
-                    class="sort-arrow"
-                    :class="{ active: pageParams.orderTag === 'createTime' && pageParams.orderType === 'desc' }"
-                  />
-                </span>
-              </span>
-              <span v-else class="column-header">短链接信息</span>
-            </template>
+          <el-table-column
+            prop="createTime"
+            label="短链接信息"
+            min-width="280"
+            :sortable="isRecycleBin ? false : 'custom'"
+            :sort-orders="['descending', 'ascending']"
+          >
             <template #default="scope">
               <div class="link-info-cell" :class="{ expired: scope?.row?.validDateType === 1 && !isExpire(scope?.row?.validDate) }">
                 <img :src="getImgUrl(scope.row.favicon)" :key="scope?.row?.id" width="20" height="20" class="favicon" alt="" />
@@ -354,6 +341,50 @@
         <div style="display: flex; justify-content: flex-end; gap: 12px; margin-top: 24px;">
           <el-button @click="isEditGroup = false">取消</el-button>
           <el-button type="primary" @click="editGroup" :loading="editGroupLoading">确认</el-button>
+        </div>
+      </div>
+    </el-drawer>
+    <!-- 右侧删除分组确认抽屉 -->
+    <el-drawer
+      v-model="groupDeleteDrawer"
+      direction="rtl"
+      size="420px"
+      :show-close="false"
+      @close="closeGroupDeleteDrawer"
+    >
+      <template #header>
+        <div class="drawer-header">
+          <span class="drawer-title">删除分组</span>
+        </div>
+      </template>
+      <div class="drawer-step2">
+        <div style="padding: 16px 0;">
+          <p style="font-size: 15px; color: #1d2129; margin-bottom: 8px;">
+            确定删除「{{ groupDeleteTarget?.name }}」分组？
+          </p>
+          <p v-if="groupDeleteCheckLoading" style="font-size: 13px; color: #86909c; line-height: 1.6;">
+            正在校验分组内短链接数量...
+          </p>
+          <p v-else-if="groupDeleteCheckFailed" style="font-size: 13px; color: #f56c6c; line-height: 1.6;">
+            分组短链接数量校验失败，请稍后重试。
+          </p>
+          <p v-else-if="groupDeleteHasLinks" style="font-size: 13px; color: #f56c6c; line-height: 1.6;">
+            当前分组下还有 {{ groupDeleteTarget?.shortLinkCount ?? 0 }} 条短链接，不能删除。请先删除或移动短链接后再操作。
+          </p>
+          <p v-else style="font-size: 13px; color: #86909c; line-height: 1.6;">
+            删除后该分组不可恢复。请确认分组内没有需要保留的短链接。
+          </p>
+        </div>
+        <div style="display: flex; justify-content: flex-end; gap: 12px; margin-top: 24px;">
+          <el-button @click="closeGroupDeleteDrawer">取消</el-button>
+          <el-button
+            type="primary"
+            :disabled="groupDeleteCheckLoading || groupDeleteCheckFailed || groupDeleteHasLinks"
+            :loading="groupDeleteCheckLoading || groupDeleteLoading"
+            @click="confirmDeleteGroup"
+          >
+            确认删除
+          </el-button>
         </div>
       </div>
     </el-drawer>
@@ -597,7 +628,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, getCurrentInstance, watch, nextTick } from 'vue'
+import { ref, reactive, computed, onMounted, onBeforeUnmount, getCurrentInstance, watch, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import Sortable from 'sortablejs'
 import { cloneDeep } from 'lodash'
@@ -846,7 +877,7 @@ const handleGroupAction = (cmd, item) => {
   if (cmd === 'edit') {
     showEditGroup(item.gid, item.name)
   } else if (cmd === 'delete') {
-    deleteGroup(item.gid)
+    showGroupDeleteDrawer(item)
   }
 }
 const transformGroupData = (oldIndex, newIndex) => {
@@ -889,6 +920,9 @@ onMounted(async () => {
     initSortable('sortOptions')
   })
 })
+onBeforeUnmount(() => {
+  releaseQrCodeObjectUrl()
+})
 
 const tableData = ref([])
 const pageParams = reactive({
@@ -905,10 +939,11 @@ watch(
     queryPage()
   }
 )
-const toggleCreateTimeSort = () => {
-  pageParams.orderTag = 'createTime'
-  pageParams.orderType = pageParams.orderType === 'asc' ? 'desc' : 'asc'
+const handleSortChange = ({ prop, order }) => {
+  if (isRecycleBin.value || prop !== 'createTime') return
   pageParams.current = 1
+  pageParams.orderTag = 'createTime'
+  pageParams.orderType = order === 'ascending' ? 'asc' : 'desc'
 }
 const totalNums = ref(0)
 const queryPage = async () => {
@@ -1007,14 +1042,64 @@ const addGroup = async () => {
   isAddGroup.value = false
   addGroupLoading.value = false
 }
-const deleteGroup = async (gid) => {
-  const res = await API.group.deleteGroup({ gid })
-  selectedIndex.value = 0
-  if (res.data.success) {
-    ElMessage.success('删除成功')
-    getGroupInfo(queryPage)
-  } else {
-    ElMessage.error(res.data.message)
+const groupDeleteDrawer = ref(false)
+const groupDeleteTarget = ref(null)
+const groupDeleteCheckLoading = ref(false)
+const groupDeleteCheckFailed = ref(false)
+const groupDeleteLoading = ref(false)
+const groupDeleteHasLinks = computed(() => (groupDeleteTarget.value?.shortLinkCount ?? 0) > 0)
+const showGroupDeleteDrawer = async (group) => {
+  groupDeleteTarget.value = { ...group }
+  groupDeleteDrawer.value = true
+  groupDeleteCheckFailed.value = false
+  groupDeleteCheckLoading.value = true
+  try {
+    const res = await API.group.queryLinkCount({ requestParam: [group.gid] })
+    if (res?.data?.success) {
+      const countInfo = res.data.data?.find(item => item.gid === group.gid)
+      groupDeleteTarget.value.shortLinkCount = countInfo?.shortLinkCount ?? 0
+    } else {
+      groupDeleteCheckFailed.value = true
+      ElMessage.error(res?.data?.message || '校验分组短链接数量失败')
+    }
+  } catch (error) {
+    groupDeleteCheckFailed.value = true
+    ElMessage.error(error?.response?.data?.message || '校验分组短链接数量失败')
+  } finally {
+    groupDeleteCheckLoading.value = false
+  }
+}
+const closeGroupDeleteDrawer = (force = false) => {
+  if ((groupDeleteLoading.value || groupDeleteCheckLoading.value) && !force) return
+  groupDeleteDrawer.value = false
+  groupDeleteTarget.value = null
+}
+const confirmDeleteGroup = async () => {
+  if (!groupDeleteTarget.value) return
+  if (groupDeleteCheckLoading.value) return
+  if (groupDeleteCheckFailed.value) {
+    ElMessage.warning('请重新打开删除确认并完成校验')
+    return
+  }
+  if (groupDeleteHasLinks.value) {
+    ElMessage.warning('该分组下存在短链接，不能删除')
+    return
+  }
+  groupDeleteLoading.value = true
+  try {
+    const res = await API.group.deleteGroup({ gid: groupDeleteTarget.value.gid })
+    if (res.data.success) {
+      ElMessage.success('删除成功')
+      selectedIndex.value = 0
+      closeGroupDeleteDrawer(true)
+      getGroupInfo(queryPage)
+    } else {
+      ElMessage.error(res.data.message)
+    }
+  } catch (error) {
+    ElMessage.error(error?.response?.data?.message || '删除失败')
+  } finally {
+    groupDeleteLoading.value = false
   }
 }
 const isEditGroup = ref(false)
@@ -1067,20 +1152,20 @@ const submitQuickUrl = async () => {
   quickUrlLoading.value = true
   try {
     const res = await API.smallLinkPage.queryTitle({ url: url })
+    if (!res?.data?.success) {
+      ElMessage.warning(res?.data?.message || '目标网站不可访问，请检查链接是否正确')
+      return
+    }
     const title = res?.data?.data || ''
-    quickUrlLoading.value = false
     quickUrl.value = ''
     isAddLinkDrawer.value = true
     nextTick(() => {
-      createLink1Ref.value?.initWithUrl(url, title)
+      createLink1Ref.value?.initWithUrl(url, title, false)
     })
-  } catch {
+  } catch (error) {
+    ElMessage.warning(error?.response?.data?.message || '目标网站不可访问，请检查链接是否正确')
+  } finally {
     quickUrlLoading.value = false
-    quickUrl.value = ''
-    isAddLinkDrawer.value = true
-    nextTick(() => {
-      createLink1Ref.value?.initWithUrl(url, '')
-    })
   }
 }
 const onAddLinkDrawerClose = () => {
@@ -1147,16 +1232,22 @@ const qrCodeDrawer = ref(false)
 const qrCodeOssUrl = ref('')
 const qrCodeLoading = ref(false)
 const qrCodeRow = ref(null)
+let qrCodeObjectUrl = ''
 const showQrCode = async (row) => {
   qrCodeRow.value = row
   qrCodeLoading.value = true
+  releaseQrCodeObjectUrl()
   qrCodeOssUrl.value = ''
   qrCodeDrawer.value = true
   try {
     const url = normalizeUrl(row.fullShortUrl)
     const res = await API.smallLinkPage.generateQrCode({ url, width: 300, height: 300 })
     if (res?.data?.success) {
-      qrCodeOssUrl.value = res.data.data?.url
+      const previewUrl = res.data.data?.url
+      const objectKey = new URL(previewUrl, window.location.origin).searchParams.get('objectKey')
+      const previewRes = await API.smallLinkPage.previewQrCode({ objectKey })
+      qrCodeObjectUrl = URL.createObjectURL(previewRes.data)
+      qrCodeOssUrl.value = qrCodeObjectUrl
     } else {
       ElMessage.error(res?.data?.message || '生成二维码失败')
     }
@@ -1165,6 +1256,11 @@ const showQrCode = async (row) => {
   } finally {
     qrCodeLoading.value = false
   }
+}
+const releaseQrCodeObjectUrl = () => {
+  if (!qrCodeObjectUrl) return
+  URL.revokeObjectURL(qrCodeObjectUrl)
+  qrCodeObjectUrl = ''
 }
 const downloadQrCode = () => {
   if (!qrCodeOssUrl.value) return
@@ -1212,22 +1308,6 @@ const confirmDelete = async () => {
   deleteTarget.value = null
 }
 
-const toRecycleBin = (data) => {
-  const { gid, fullShortUrl } = data
-  API.smallLinkPage
-    .toRecycleBin({ gid, fullShortUrl })
-    .then((res) => {
-      if (res?.data?.code !== '0') {
-        ElMessage.error(res.data.message)
-      } else {
-        ElMessage.success('删除成功')
-        getGroupInfo(queryPage)
-      }
-    })
-    .catch(() => {
-      ElMessage.error('删除失败')
-    })
-}
 const recoverLink = (data) => {
   const { gid, fullShortUrl } = data
   API.smallLinkPage
@@ -1239,22 +1319,6 @@ const recoverLink = (data) => {
     })
     .catch(() => {
       ElMessage.error('恢复失败')
-    })
-}
-const removeLink = (data) => {
-  const { gid, fullShortUrl } = data
-  API.smallLinkPage
-    .removeLink({ gid, fullShortUrl })
-    .then((res) => {
-      if (res?.data?.code !== '0') {
-        ElMessage.error(res.data.message)
-      } else {
-        ElMessage.success('删除成功')
-        queryRecycleBinPage()
-      }
-    })
-    .catch(() => {
-      ElMessage.error('删除失败')
     })
 }
 </script>

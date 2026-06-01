@@ -10,9 +10,12 @@ import org.hang.shortlink.admin.pojo.po.Group;
 import org.hang.shortlink.admin.properties.RedisConstant;
 import org.hang.shortlink.admin.properties.ShortLinkProperties;
 import org.hang.shortlink.admin.service.GroupService;
+import org.hang.shortlink.admin.service.ShortLinkActualRemoteService;
 import org.hang.shortlink.common.exception.ServiceException;
+import org.hang.shortlink.common.pojo.Result;
 import org.hang.shortlink.common.utils.UserContext;
 import org.hang.shortlink.admin.utils.UUidV7Generator;
+import org.hang.shortlink.project.dto.link.reseponse.LinkGroupCountResponseDto;
 import org.redisson.api.RLock;
 import org.redisson.api.RedissonClient;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -40,6 +43,8 @@ public class GroupServiceImpl extends ServiceImpl<GroupMapper, Group> implements
     private final ShortLinkProperties shortLinkProperties;
 
     private final RedissonClient redissonClient;
+
+    private final ShortLinkActualRemoteService shortLinkActualRemoteService;
 
 
     @Override
@@ -149,10 +154,36 @@ public class GroupServiceImpl extends ServiceImpl<GroupMapper, Group> implements
 
     @Override
     public void removeGroup(String gid) {
-        if(gid == null){
+        if(StrUtil.isBlank(gid)){
             throw new ServiceException("删除分组失败");
         }
-        boolean removed = lambdaUpdate().eq(Group::getGid, gid).remove();
+        String username = UserContext.getUserInfo();
+        if(StrUtil.isBlank(username)){
+            throw new ServiceException("请登录后重试");
+        }
+        Long groupCount = lambdaQuery()
+                .eq(Group::getGid, gid)
+                .eq(Group::getUsername, username)
+                .count();
+        if(groupCount == null || groupCount.equals(0L)){
+            throw new ServiceException("删除分组失败");
+        }
+        Result<List<LinkGroupCountResponseDto>> countResult = shortLinkActualRemoteService.listGroupShortLinkCount(List.of(gid));
+        if(countResult == null || !countResult.isSuccess() || CollUtil.isEmpty(countResult.getData())){
+            throw new ServiceException("查询分组短链接数量失败");
+        }
+        Integer shortLinkCount = countResult.getData().stream()
+                .filter(each -> gid.equals(each.getGid()))
+                .findFirst()
+                .map(LinkGroupCountResponseDto::getShortLinkCount)
+                .orElse(0);
+        if(shortLinkCount > 0){
+            throw new ServiceException("该分组下存在短链接，不能删除，请先删除或移动短链接");
+        }
+        boolean removed = lambdaUpdate()
+                .eq(Group::getGid, gid)
+                .eq(Group::getUsername, username)
+                .remove();
         if(!removed){
             throw new ServiceException("删除分组失败");
         }

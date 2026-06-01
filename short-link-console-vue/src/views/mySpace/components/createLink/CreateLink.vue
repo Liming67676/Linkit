@@ -173,6 +173,7 @@ const fd = (fn, delay) => {
   }
 }
 const isLoading = ref(false)
+const skipNextTitleQuery = ref(false)
 const queryTitle = (url) => {
   if (reg.test(url)) {
     isLoading.value = true
@@ -187,6 +188,10 @@ watch(
   () => formData.originUrl,
   (nV) => {
     originUrlRows.value = (nV || '').split(/\r\n|\r|\n/).filter(Boolean)?.length ?? 0
+    if (skipNextTitleQuery.value) {
+      skipNextTitleQuery.value = false
+      return
+    }
     // 只有在描述内容为空时才会去查询链接对应的标题
     if (!formData.describe) {
       // 外边包一层防抖
@@ -341,13 +346,16 @@ defineExpose({
   // 当外部对话框以任何方式关闭时，初始化表单数据
   initFormData,
   // 从快速输入步骤传入URL和标题，自动填充并获取标题
-  initWithUrl(url, title) {
+  initWithUrl(url, title, autoQueryTitle = true) {
     initFormData()
     if (title) {
       formData.describe = title
     }
+    if (!autoQueryTitle || (!title && autoQueryTitle)) {
+      skipNextTitleQuery.value = true
+    }
     formData.originUrl = url
-    if (!title) {
+    if (!title && autoQueryTitle) {
       queryTitle(url)
     }
   }

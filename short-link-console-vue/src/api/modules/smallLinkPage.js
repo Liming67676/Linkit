@@ -90,5 +90,13 @@ export default {
       params: data,
       url: '/QR'
     })
+  },
+  previewQrCode(data) {
+    return http({
+      method: 'get',
+      params: data,
+      url: '/QR/preview',
+      responseType: 'blob'
+    })
   }
 }

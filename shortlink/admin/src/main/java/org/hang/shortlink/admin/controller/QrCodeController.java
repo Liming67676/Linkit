@@ -2,6 +2,7 @@ package org.hang.shortlink.admin.controller;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import org.hang.shortlink.admin.utils.OssUtils;
 import org.hang.shortlink.common.pojo.Result;
@@ -34,5 +35,11 @@ public class QrCodeController {
         String ossUrl = ossUtils.uploadQrCode(url, width, height, qrBytes);
 
         return Result.success(Map.of("url", ossUrl));
+    }
+
+    @GetMapping("/api/short-link/admin/v1/QR/preview")
+    @Operation(summary = "预览短链接二维码", description = "通过后端代理返回二维码图片，避免OSS默认域名强制下载")
+    public void previewQrCode(@RequestParam("objectKey") String objectKey, HttpServletResponse response) {
+        ossUtils.previewQrCode(objectKey, response);
     }
 }

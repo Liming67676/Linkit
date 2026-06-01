@@ -3,6 +3,7 @@ package org.hang.shortlink.project.service.impl;
 import cn.hutool.core.bean.BeanUtil;
 import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.util.StrUtil;
+import cn.hutool.crypto.SecureUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
@@ -50,6 +51,9 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 import org.springframework.util.StringUtils;
 
 import java.io.IOException;
+import java.net.HttpURLConnection;
+import java.net.SocketTimeoutException;
+import java.net.UnknownHostException;
 import java.net.URL;
 import java.time.LocalDateTime;
 import java.util.*;
@@ -64,6 +68,18 @@ import java.util.stream.Collectors;
 @Slf4j
 @RequiredArgsConstructor
 public class LinkServiceImpl extends ServiceImpl<LinkMapper, Link> implements ILinkService {
+
+    private static final int TITLE_PROBE_TIMEOUT_MS = 1200;
+
+    private static final int TITLE_FETCH_TIMEOUT_MS = 2500;
+
+    private static final int TITLE_MAX_BODY_SIZE = 256 * 1024;
+
+    private static final String TITLE_CACHE_PREFIX = "short-link:title:";
+
+    private static final String EMPTY_TITLE_CACHE_VALUE = "__EMPTY__";
+
+    private static final String UNREACHABLE_TITLE_CACHE_VALUE = "__UNREACHABLE__";
 
     private final ShortUrlGeneratorUtils shortUrlGeneratorUtils;
 
@@ -681,18 +697,109 @@ public class LinkServiceImpl extends ServiceImpl<LinkMapper, Link> implements IL
 
     @Override
     public String getTitleByUrl(String url) {
-        try {
-            // 使用Jsoup直接连接URL并获取文档
-            Document document = Jsoup.connect(url)
-                    .timeout(10000) // 设置10秒超时
-                    .userAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
-                    .followRedirects(true) // 跟随重定向
-                    .get();
-            return document.title();
-        } catch (IOException e) {
-            System.err.println("获取URL标题时发生错误: " + e.getMessage());
+        String targetUrl = normalizeTitleUrl(url);
+        if (!StringUtils.hasText(targetUrl)) {
             return "";
         }
+        String titleCacheKey = TITLE_CACHE_PREFIX + SecureUtil.md5(targetUrl);
+        String cachedTitle = redisTemplate.opsForValue().get(titleCacheKey);
+        if (StringUtils.hasText(cachedTitle)) {
+            if (UNREACHABLE_TITLE_CACHE_VALUE.equals(cachedTitle)) {
+                throw new ServiceException("目标网站不可访问，请检查链接是否正确");
+            }
+            return EMPTY_TITLE_CACHE_VALUE.equals(cachedTitle) ? "" : cachedTitle;
+        }
+        TitleProbeResult probeResult = probeTitleUrl(targetUrl);
+        if (TitleProbeResult.NOT_EXISTS.equals(probeResult)) {
+            redisTemplate.opsForValue().set(titleCacheKey, UNREACHABLE_TITLE_CACHE_VALUE, 1, TimeUnit.MINUTES);
+            throw new ServiceException("目标网站不可访问，请检查链接是否正确");
+        }
+        try {
+            Document document = Jsoup.connect(targetUrl)
+                    .timeout(TITLE_FETCH_TIMEOUT_MS)
+                    .maxBodySize(TITLE_MAX_BODY_SIZE)
+                    .userAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+                    .referrer("https://www.google.com")
+                    .ignoreHttpErrors(true)
+                    .ignoreContentType(true)
+                    .followRedirects(true)
+                    .get();
+            String title = StrUtil.trimToEmpty(document.title());
+            redisTemplate.opsForValue().set(
+                    titleCacheKey,
+                    StringUtils.hasText(title) ? title : EMPTY_TITLE_CACHE_VALUE,
+                    StringUtils.hasText(title) ? 1 : 10,
+                    StringUtils.hasText(title) ? TimeUnit.DAYS : TimeUnit.MINUTES
+            );
+            return title;
+        } catch (IOException e) {
+            log.warn("获取URL标题失败, url={}", targetUrl, e);
+            redisTemplate.opsForValue().set(titleCacheKey, EMPTY_TITLE_CACHE_VALUE, 1, TimeUnit.MINUTES);
+            return "";
+        }
+    }
+
+    private String normalizeTitleUrl(String url) {
+        if (!StringUtils.hasText(url)) {
+            throw new ServiceException("链接不能为空");
+        }
+        try {
+            URL targetUrl = new URL(url);
+            String protocol = targetUrl.getProtocol();
+            if ((!"http".equalsIgnoreCase(protocol) && !"https".equalsIgnoreCase(protocol))
+                    || !StringUtils.hasText(targetUrl.getHost())) {
+                throw new ServiceException("链接格式不合法，请输入正确的 http:// 或 https:// 链接");
+            }
+            return targetUrl.toString();
+        } catch (Exception e) {
+            if (e instanceof ServiceException serviceException) {
+                throw serviceException;
+            }
+            log.warn("URL格式不合法, url={}", url);
+            throw new ServiceException("链接格式不合法，请输入正确的 http:// 或 https:// 链接");
+        }
+    }
+
+    private TitleProbeResult probeTitleUrl(String url) {
+        HttpURLConnection connection = null;
+        try {
+            connection = (HttpURLConnection) new URL(url).openConnection();
+            connection.setRequestMethod("HEAD");
+            connection.setConnectTimeout(TITLE_PROBE_TIMEOUT_MS);
+            connection.setReadTimeout(TITLE_PROBE_TIMEOUT_MS);
+            connection.setInstanceFollowRedirects(true);
+            connection.setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36");
+            int status = connection.getResponseCode();
+            if (status == HttpURLConnection.HTTP_NOT_FOUND || status == HttpURLConnection.HTTP_GONE) {
+                return TitleProbeResult.NOT_EXISTS;
+            }
+            if ((status >= HttpURLConnection.HTTP_OK && status < HttpURLConnection.HTTP_BAD_REQUEST)
+                    || status == HttpURLConnection.HTTP_FORBIDDEN
+                    || status == HttpURLConnection.HTTP_UNAUTHORIZED
+                    || status == HttpURLConnection.HTTP_BAD_METHOD) {
+                return TitleProbeResult.EXISTS;
+            }
+            return TitleProbeResult.UNKNOWN;
+        } catch (UnknownHostException e) {
+            log.warn("URL标题探针域名解析失败, url={}, message={}", url, e.getMessage());
+            return TitleProbeResult.NOT_EXISTS;
+        } catch (SocketTimeoutException e) {
+            log.warn("URL标题探针请求超时, url={}, message={}", url, e.getMessage());
+            return TitleProbeResult.UNKNOWN;
+        } catch (IOException e) {
+            log.warn("URL标题探针请求失败, url={}, message={}", url, e.getMessage());
+            return TitleProbeResult.UNKNOWN;
+        } finally {
+            if (connection != null) {
+                connection.disconnect();
+            }
+        }
+    }
+
+    private enum TitleProbeResult {
+        EXISTS,
+        NOT_EXISTS,
+        UNKNOWN
     }
 
 

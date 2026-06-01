@@ -1,16 +1,21 @@
 package org.hang.shortlink.admin.utils;
 
-import cn.hutool.core.util.StrUtil;
 import cn.hutool.crypto.SecureUtil;
 import com.aliyun.oss.OSS;
-import com.aliyun.oss.OSSClient;
+import com.aliyun.oss.model.ObjectMetadata;
+import com.aliyun.oss.model.OSSObject;
 import com.aliyun.oss.model.PutObjectRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.hang.shortlink.common.exception.ServiceException;
 import org.hang.shortlink.common.propreties.OssProperties;
 import org.springframework.stereotype.Component;
+import org.springframework.util.StreamUtils;
 
 import java.io.ByteArrayInputStream;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 
 @Slf4j
 @Component
@@ -28,23 +33,44 @@ public class OssUtils {
         String objectKey = "qr/" + md5Str + "_" + width + "x" + height + ".png";
         String bucketName = ossProperties.getBucket();
 
-        // 先判断文件是否已存在
         boolean exists = ossClient.doesObjectExist(bucketName, objectKey);
         if (exists) {
-            log.info("二维码已存在于OSS，直接返回：{}", objectKey);
-            // 直接返回已存在的URL，不上传
-            return "https://" + bucketName + "." + ossProperties.getEndpoint() + "/" + objectKey;
+            log.info("二维码已存在，返回后端预览链接：{}", objectKey);
+            return buildPreviewUrl(objectKey);
         }
 
-        // 不存在 → 执行上传
-        PutObjectRequest request = new PutObjectRequest(
-                bucketName,
-                objectKey,
-                new ByteArrayInputStream(qrBytes)
-        );
-        ossClient.putObject(request);
-        log.info("二维码已上传至OSS，key={}", objectKey);
+        // 上传逻辑不变
+        ObjectMetadata metadata = new ObjectMetadata();
+        metadata.setContentType("image/png");
+        metadata.setContentDisposition("inline");
+        metadata.setContentLength(qrBytes.length);
+        PutObjectRequest putRequest = new PutObjectRequest(bucketName, objectKey, new ByteArrayInputStream(qrBytes), metadata);
+        ossClient.putObject(putRequest);
+        log.info("二维码上传完成，key={}", objectKey);
 
-        return "https://" + bucketName + "." + ossProperties.getEndpoint() + "/" + objectKey;
+        return buildPreviewUrl(objectKey);
+    }
+
+    /**
+     * 通过后端代理输出图片，避免 OSS 默认域名触发强制下载。
+     */
+    public void previewQrCode(String objectKey, HttpServletResponse response) {
+        if (!objectKey.startsWith("qr/") || !objectKey.endsWith(".png")) {
+            throw new ServiceException("二维码地址非法");
+        }
+        response.setContentType("image/png");
+        response.setHeader("Content-Disposition", "inline; filename=\"qrcode.png\"");
+        response.setHeader("Cache-Control", "private, max-age=300");
+        try (OSSObject ossObject = ossClient.getObject(ossProperties.getBucket(), objectKey)) {
+            StreamUtils.copy(ossObject.getObjectContent(), response.getOutputStream());
+        } catch (Exception ex) {
+            log.error("二维码预览失败，key={}", objectKey, ex);
+            throw new ServiceException("二维码预览失败");
+        }
+    }
+
+    private String buildPreviewUrl(String objectKey) {
+        return "/api/short-link/admin/v1/QR/preview?objectKey="
+                + URLEncoder.encode(objectKey, StandardCharsets.UTF_8);
     }
 }
