@@ -376,6 +376,7 @@ public class LinkServiceImpl extends ServiceImpl<LinkMapper, Link> implements IL
         long current = pageQuery.getCurrent() != null ? pageQuery.getCurrent() : 1L;
         long size = pageQuery.getSize() != null ? pageQuery.getSize() : 10L;
         Page<Link> page = new Page<>(current, size);
+        boolean asc = isAscOrder(pageQuery.getOrderType());
 
         // 1. 构建基础查询条件
         var queryWrapper = Wrappers.lambdaQuery(Link.class)
@@ -387,14 +388,13 @@ public class LinkServiceImpl extends ServiceImpl<LinkMapper, Link> implements IL
         if (StrUtil.isNotEmpty(orderTag)) {
             switch (orderTag) {
                 case "createTime":
-                    queryWrapper.orderByDesc(Link::getCreateTime);
+                    queryWrapper.orderBy(true, asc, Link::getCreateTime);
                     break;
                 case "updateTime":
-                    queryWrapper.orderByDesc(Link::getUpdateTime);
+                    queryWrapper.orderBy(true, asc, Link::getUpdateTime);
                     break;
                 default:
-                    // 默认排序：更新时间倒序
-                    queryWrapper.orderByDesc(Link::getUpdateTime);
+                    queryWrapper.orderBy(true, asc, Link::getUpdateTime);
             }
         } else {
             queryWrapper.orderByDesc(Link::getUpdateTime);
@@ -433,22 +433,22 @@ public class LinkServiceImpl extends ServiceImpl<LinkMapper, Link> implements IL
         if (StrUtil.isNotEmpty(orderTag)) {
             switch (orderTag) {
                 case "todayPv":
-                    records.sort(Comparator.comparingInt(LinkPageResponseDto::getTodayPv).reversed());
+                    records.sort(buildIntComparator(LinkPageResponseDto::getTodayPv, asc));
                     break;
                 case "totalPv":
-                    records.sort(Comparator.comparingInt(LinkPageResponseDto::getTotalPv).reversed());
+                    records.sort(buildIntComparator(LinkPageResponseDto::getTotalPv, asc));
                     break;
                 case "todayUv":
-                    records.sort(Comparator.comparingInt(LinkPageResponseDto::getTodayUv).reversed());
+                    records.sort(buildIntComparator(LinkPageResponseDto::getTodayUv, asc));
                     break;
                 case "totalUv":
-                    records.sort(Comparator.comparingInt(LinkPageResponseDto::getTotalUv).reversed());
+                    records.sort(buildIntComparator(LinkPageResponseDto::getTotalUv, asc));
                     break;
                 case "todayUip":
-                    records.sort(Comparator.comparingInt(LinkPageResponseDto::getTodayUip).reversed());
+                    records.sort(buildIntComparator(LinkPageResponseDto::getTodayUip, asc));
                     break;
                 case "totalUip":
-                    records.sort(Comparator.comparingInt(LinkPageResponseDto::getTotalUip).reversed());
+                    records.sort(buildIntComparator(LinkPageResponseDto::getTotalUip, asc));
                     break;
             }
         }
@@ -471,6 +471,15 @@ public class LinkServiceImpl extends ServiceImpl<LinkMapper, Link> implements IL
             return 0;
         }
         return Integer.parseInt(map.get(key).toString());
+    }
+
+    private boolean isAscOrder(String orderType) {
+        return StrUtil.equalsIgnoreCase(orderType, "asc");
+    }
+
+    private Comparator<LinkPageResponseDto> buildIntComparator(java.util.function.ToIntFunction<LinkPageResponseDto> extractor, boolean asc) {
+        Comparator<LinkPageResponseDto> comparator = Comparator.comparingInt(extractor);
+        return asc ? comparator : comparator.reversed();
     }
 
 

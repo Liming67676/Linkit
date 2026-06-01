@@ -42,4 +42,7 @@ public class LinkPageQueryDto implements Serializable {
     @Schema(description = "排序标识")
     private String orderTag;
 
+    @Schema(description = "排序方向，asc/desc")
+    private String orderType;
+
 }

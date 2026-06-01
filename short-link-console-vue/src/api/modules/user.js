@@ -22,7 +22,7 @@ export default {
       url: '/user/login',
       method: 'post',
       data,
-      timeout: 5000,
+      timeout: 10000,
       ...config
     })
   },

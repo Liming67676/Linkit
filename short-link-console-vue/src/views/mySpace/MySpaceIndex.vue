@@ -117,15 +117,23 @@
           <el-table-column type="selection" width="40" />
           <el-table-column label="短链接信息" min-width="280">
             <template #header>
-              <el-dropdown v-if="!isRecycleBin">
-                <span class="column-header">
-                  短链接信息
-                  <CaretBottom class="el-icon" />
+              <span
+                v-if="!isRecycleBin"
+                class="column-header sortable-header"
+                @click="toggleCreateTimeSort"
+              >
+                短链接信息
+                <span class="sort-arrows" :class="{ active: pageParams.orderTag === 'createTime' }">
+                  <CaretTop
+                    class="sort-arrow"
+                    :class="{ active: pageParams.orderTag === 'createTime' && pageParams.orderType === 'asc' }"
+                  />
+                  <CaretBottom
+                    class="sort-arrow"
+                    :class="{ active: pageParams.orderTag === 'createTime' && pageParams.orderType === 'desc' }"
+                  />
                 </span>
-                <template #dropdown>
-                  <el-dropdown-item @click="pageParams.orderTag = null, orderIndex = 0">创建时间</el-dropdown-item>
-                </template>
-              </el-dropdown>
+              </span>
               <span v-else class="column-header">短链接信息</span>
             </template>
             <template #default="scope">
@@ -722,8 +730,6 @@ const confirmLogout = async () => {
     await API.user.logout()
     removeUsername()
     removeKey()
-    localStorage.removeItem('token')
-    localStorage.removeItem('username')
     logoutDrawer.value = false
     ElMessage.success('已安全退出')
     router.push('/login')
@@ -889,15 +895,21 @@ const pageParams = reactive({
   gid: null,
   current: 1,
   size: 10,
-  orderTag: null
+  orderTag: 'createTime',
+  orderType: 'desc'
 })
 watch(
-  () => pageParams.orderTag,
+  () => [pageParams.orderTag, pageParams.orderType],
   () => {
     if (isRecycleBin.value) return
     queryPage()
   }
 )
+const toggleCreateTimeSort = () => {
+  pageParams.orderTag = 'createTime'
+  pageParams.orderType = pageParams.orderType === 'asc' ? 'desc' : 'asc'
+  pageParams.current = 1
+}
 const totalNums = ref(0)
 const queryPage = async () => {
   pageParams.gid = editableTabs.value?.[selectedIndex.value]?.gid
@@ -959,11 +971,16 @@ const recycleBin = () => {
   pageParams.current = 1
   pageParams.size = 15
   pageParams.orderTag = null
+  pageParams.orderType = null
   queryRecycleBinPage()
 }
 const changeSelectIndex = (index) => {
   selectedIndex.value = index
   isRecycleBin.value = false
+  if (!pageParams.orderTag) {
+    pageParams.orderTag = 'createTime'
+    pageParams.orderType = 'desc'
+  }
   queryPage()
 }
 const isAddGroup = ref(false)
@@ -2118,6 +2135,37 @@ $shadow-hover: 0 6px 20px rgba(0, 0, 0, 0.1);
   display: inline-flex;
   align-items: center;
   gap: 6px;
+}
+
+.sortable-header {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.sort-arrows {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: #b8bfd0;
+  line-height: 1;
+}
+
+.sort-arrows.active {
+  color: #8c95a8;
+}
+
+.sort-arrow {
+  font-size: 12px;
+  margin: -2px 0;
+}
+
+.sort-arrow.active {
+  color: $primary;
+  font-weight: 700;
 }
 
 // 排序索引高亮

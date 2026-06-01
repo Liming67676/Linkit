@@ -43,7 +43,10 @@ public class RecycleBinServiceImpl implements RecycleBinService {
         if(StrUtil.isEmpty(userInfo)){
             throw new RuntimeException("用户不存在");
         }
-        List<Group> groups = groupService.lambdaQuery().eq(Group::getUsername, userInfo).list();
+        List<Group> groups = groupService.lambdaQuery()
+                .select(Group::getGid)
+                .eq(Group::getUsername, userInfo)
+                .list();
         if (groups.isEmpty()) {
             throw new RuntimeException("用户分组不存在");
         }

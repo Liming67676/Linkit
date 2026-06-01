@@ -185,8 +185,6 @@ const handleLoginSuccess = (token, username) => {
   if (token) {
     setToken(token)
     setUsername(username)
-    localStorage.setItem('token', token)
-    localStorage.setItem('username', username)
   }
   ElMessage.success('登录成功！')
   router.push('/home')

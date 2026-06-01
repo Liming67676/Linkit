@@ -45,8 +45,6 @@ http.interceptors.response.use(
         if (err.response) {
             if (err.response.status === 401) {
                 ElMessage.warning('登录已失效，请重新登录')
-                localStorage.removeItem('token')
-                localStorage.removeItem('username')
                 removeKey()
                 removeUsername()
                 router.push('/login')

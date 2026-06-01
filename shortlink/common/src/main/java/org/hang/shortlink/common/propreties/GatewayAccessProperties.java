@@ -31,11 +31,14 @@ public class GatewayAccessProperties {
             "/page/**",
             "/page/**/*.html",
             "/*.html",
-            "/*",
             "/doc.html",
             "/webjars/**",
             "/swagger-ui/**",
             "/v3/api-docs/**",
-            "/actuator/**"
+            "/actuator/**",
+            "/api/short-link/admin/v1/user/login",
+            "/api/short-link/admin/v1/user/register",
+            "/api/short-link/admin/v1/user/has-username",
+            "/api/short-link/admin/v1/user/check-login"
     );
 }

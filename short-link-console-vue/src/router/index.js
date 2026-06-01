@@ -1,7 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { isNotEmpty } from '@/utils/plugins'
-import { getToken, getUsername, setToken, setUsername } from '@/core/auth' // 验权
-import user from '@/api/modules/user'
+import { getToken } from '@/core/auth'
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
@@ -44,21 +43,7 @@ const router = createRouter({
   ]
 })
 
-// eslint-disable-next-line no-unused-vars
 router.beforeEach(async (to, from, next) => {
-  const localToken = localStorage.getItem('token')
-  const localUsername = localStorage.getItem('username')
-  const cookieToken = getToken()
-  const cookieUsername = getUsername()
-
-  // 仅在 cookie 缺失且 localStorage 里有有效值时做一次回填，避免把现有 cookie 覆盖成 null/undefined
-  if (!isNotEmpty(cookieToken) && isNotEmpty(localToken)) {
-    setToken(localToken)
-  }
-  if (!isNotEmpty(cookieUsername) && isNotEmpty(localUsername)) {
-    setUsername(localUsername)
-  }
-
   const token = getToken()
   if (to.path === '/login') {
     next()
