@@ -3,12 +3,10 @@
   "version": "0.0.0",
   "private": true,
   "scripts": {
-    "dev": "vite --mode local",
-    "dev:local": "vite --mode local",
-    "dev:product": "vite --mode product",
+    "dev": "vite --mode dev",
+    "dev:prod": "vite --mode product",
     "build": "vite build --mode product",
-    "build:local": "vite build --mode local",
-    "build:product": "vite build --mode product",
+    "build:dev": "vite build --mode dev",
     "preview": "vite preview",
     "lint": "eslint . --ext .vue,.js,.jsx,.cjs,.mjs --fix --ignore-path .gitignore",
     "format": "prettier --write src/"

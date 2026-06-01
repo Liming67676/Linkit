@@ -45,6 +45,8 @@ import org.redisson.api.RedissonClient;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.util.StringUtils;
 
 import java.io.IOException;
@@ -136,7 +138,6 @@ public class LinkServiceImpl extends ServiceImpl<LinkMapper, Link> implements IL
                 link.setValidDate(dto.getValidDate());
             } else {
                 link.setValidDate(LocalDateTime.now().plusDays(30));// 默认30天有效期
-                // todo 定时任务处理过期
             }
             boolean saved = save(link);
             if (!saved) {
@@ -153,6 +154,7 @@ public class LinkServiceImpl extends ServiceImpl<LinkMapper, Link> implements IL
                     .fullShortUrl(link.getFullShortUrl())
                     .gid(link.getGid())
                     .build());
+            deleteGroupCountCache(link.getGid());
             return new LikCreateResponseDto(link.getGid(), link.getOriginUrl(), link.getFullShortUrl());
         } finally {
             if (lock.isHeldByCurrentThread()) {
@@ -257,6 +259,7 @@ public class LinkServiceImpl extends ServiceImpl<LinkMapper, Link> implements IL
                         .gid(link.getGid())
                         .build());
             }
+            deleteGroupCountCache(gid);
 
             return LinkBatchCreateResponseDto.builder()
                     .total(baseInfoList.size())
@@ -297,6 +300,7 @@ public class LinkServiceImpl extends ServiceImpl<LinkMapper, Link> implements IL
             if(!updated){
                 throw new ServiceException("短链接更新失败");
             }
+            deleteGroupCountCache(dto.getOriginGid());
             return true;
         }
 
@@ -354,6 +358,7 @@ public class LinkServiceImpl extends ServiceImpl<LinkMapper, Link> implements IL
         if (!saved_1) {
             throw new ServiceException("短链接更新失败");
         }
+        deleteGroupCountCache(dto.getOriginGid(), link.getGid());
         // 6. 如果原始链接变化，异步通过MQ获取新favicon
         if (!link.getOriginUrl().equals(dto.getOriginUrl())) {
             rabbitMQProducer.sendFaviconMessage(FaviconMessage.builder()
@@ -475,20 +480,57 @@ public class LinkServiceImpl extends ServiceImpl<LinkMapper, Link> implements IL
             return new ArrayList<>();
         }
 
+        List<String> gidList = requestParam.stream()
+                .filter(StrUtil::isNotBlank)
+                .distinct()
+                .toList();
+        if (CollUtil.isEmpty(gidList)) {
+            return new ArrayList<>();
+        }
 
-        // 3. 关键：使用 selectMaps() 获取统计结果
-        List<Map<String, Object>> mapList = baseMapper.selectMaps(new QueryWrapper<Link>()
-                .select("gid", "COUNT(id) AS shortLinkCount")
-                .eq("enable_status", 0)
-                .in("gid", requestParam)
-                .groupBy("gid"));
+        Map<String, Integer> countMap = new HashMap<>(gidList.size());
+        List<String> missGidList = new ArrayList<>();
+        List<String> cacheKeys = gidList.stream()
+                .map(gid -> String.format(RedisConstant.GROUP_SHORT_LINK_COUNT_KEY, gid))
+                .toList();
+        List<String> cacheValues = redisTemplate.opsForValue().multiGet(cacheKeys);
+        for (int i = 0; i < gidList.size(); i++) {
+            String gid = gidList.get(i);
+            String cacheValue = cacheValues == null ? null : cacheValues.get(i);
+            Integer count = parseCachedCount(cacheValue);
+            if (count == null) {
+                missGidList.add(gid);
+            } else {
+                countMap.put(gid, count);
+            }
+        }
 
-        // 4. 将Map结果转为 gid -> 数量 的Map
-        Map<String, Integer> countMap = mapList.stream()
-                .collect(Collectors.toMap(
-                        map -> String.valueOf(map.get("gid")),
-                        map -> Integer.valueOf(String.valueOf(map.get("shortLinkCount")))
-                ));
+        if (CollUtil.isNotEmpty(missGidList)) {
+            // 3. 关键：使用 selectMaps() 获取统计结果
+            List<Map<String, Object>> mapList = baseMapper.selectMaps(new QueryWrapper<Link>()
+                    .select("gid", "COUNT(id) AS shortLinkCount")
+                    .eq("enable_status", 0)
+                    .eq("del_flag", 0)
+                    .in("gid", missGidList)
+                    .groupBy("gid"));
+
+            // 4. 将Map结果转为 gid -> 数量 的Map
+            Map<String, Integer> dbCountMap = mapList.stream()
+                    .collect(Collectors.toMap(
+                            map -> String.valueOf(map.get("gid")),
+                            map -> Integer.valueOf(String.valueOf(map.get("shortLinkCount")))
+                    ));
+            for (String gid : missGidList) {
+                Integer count = dbCountMap.getOrDefault(gid, 0);
+                countMap.put(gid, count);
+                redisTemplate.opsForValue().set(
+                        String.format(RedisConstant.GROUP_SHORT_LINK_COUNT_KEY, gid),
+                        String.valueOf(count),
+                        RedisConstant.GROUP_SHORT_LINK_COUNT_EXPIRE_SECONDS,
+                        TimeUnit.SECONDS
+                );
+            }
+        }
 
         // 5. 遍历所有传入的gid，补全0值
         return requestParam.stream()
@@ -743,6 +785,41 @@ public class LinkServiceImpl extends ServiceImpl<LinkMapper, Link> implements IL
             }
         }
         return linkList;
+    }
+
+    private void deleteGroupCountCache(String... gids) {
+        if (gids == null || gids.length == 0) {
+            return;
+        }
+        List<String> keys = Arrays.stream(gids)
+                .filter(StrUtil::isNotBlank)
+                .distinct()
+                .map(gid -> String.format(RedisConstant.GROUP_SHORT_LINK_COUNT_KEY, gid))
+                .toList();
+        if (CollUtil.isEmpty(keys)) {
+            return;
+        }
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    redisTemplate.delete(keys);
+                }
+            });
+        } else {
+            redisTemplate.delete(keys);
+        }
+    }
+
+    private Integer parseCachedCount(String cacheValue) {
+        if (StrUtil.isBlank(cacheValue)) {
+            return null;
+        }
+        try {
+            return Integer.parseInt(cacheValue);
+        } catch (NumberFormatException ex) {
+            return null;
+        }
     }
 
 }

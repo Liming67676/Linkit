@@ -12,7 +12,6 @@ import org.hang.shortlink.project.dto.link.reseponse.LikCreateResponseDto;
 import org.hang.shortlink.project.dto.link.reseponse.LinkBatchCreateResponseDto;
 import org.hang.shortlink.project.dto.link.reseponse.LinkGroupCountResponseDto;
 import org.hang.shortlink.project.dto.link.reseponse.LinkPageResponseDto;
-import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.cloud.openfeign.FallbackFactory;
 
 import java.util.Collections;
@@ -25,18 +24,6 @@ import java.util.List;
  */
 @Slf4j
 public class ShortLinkClientFallBack implements FallbackFactory<ShortLinkClient> {
-
-    private static final String EXCHANGE = "short.link.direct";
-    private static final String CREATE_ROUTING_KEY = "short.link.create";
-    private static final String BATCH_CREATE_ROUTING_KEY = "short.link.batch.create";
-    private static final String UPDATE_ROUTING_KEY = "short.link.update";
-
-    private final RabbitTemplate rabbitTemplate;
-
-    public ShortLinkClientFallBack(RabbitTemplate rabbitTemplate) {
-        this.rabbitTemplate = rabbitTemplate;
-    }
-
     @Override
     public ShortLinkClient create(Throwable cause) {
         log.error("[短链接服务降级] 服务不可用，异常信息：", cause);
@@ -50,23 +37,20 @@ public class ShortLinkClientFallBack implements FallbackFactory<ShortLinkClient>
 
             @Override
             public Result createLink(LinkCreateRequestDto createRequest) {
-                log.warn("[短链接降级] 创建短链接失败，触发异步补偿，参数：{}", createRequest);
-                rabbitTemplate.convertAndSend(EXCHANGE, CREATE_ROUTING_KEY, createRequest);
-                return Result.success("创建请求已提交，系统处理中...");
+                log.warn("[短链接降级] 创建短链接不可用，参数：{}", createRequest);
+                return Result.failure("短链接服务暂时不可用，请稍后重试");
             }
 
             @Override
             public Result batchCreateShortLink(ShortLinkBatchCreateRequestDto batchCreateRequest) {
-                log.warn("[短链接降级] 批量创建短链接失败，触发异步补偿，参数：{}", batchCreateRequest);
-                rabbitTemplate.convertAndSend(EXCHANGE, BATCH_CREATE_ROUTING_KEY, batchCreateRequest);
-                return Result.success("批量创建请求已提交，系统处理中...");
+                log.warn("[短链接降级] 批量创建短链接不可用，参数：{}", batchCreateRequest);
+                return Result.failure("短链接服务暂时不可用，请稍后重试");
             }
 
             @Override
             public Result updateLink(LinkUpdateRequestDto updateRequest) {
-                log.warn("[短链接降级] 修改短链接失败，触发异步补偿，参数：{}", updateRequest);
-                rabbitTemplate.convertAndSend(EXCHANGE, UPDATE_ROUTING_KEY, updateRequest);
-                return Result.success("修改请求已提交，系统处理中...");
+                log.warn("[短链接降级] 修改短链接不可用，参数：{}", updateRequest);
+                return Result.failure("短链接服务暂时不可用，请稍后重试");
             }
 
             @Override

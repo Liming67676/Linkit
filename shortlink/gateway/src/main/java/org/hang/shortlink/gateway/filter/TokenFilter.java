@@ -70,7 +70,7 @@ public class TokenFilter implements GlobalFilter, Ordered {
             return unauthorizedResponse(exchange, "登录凭证无效或已过期");
         }
 
-        log.info("user_info = {}", userInfo);
+        log.debug("gateway authenticated user={}", userInfo);
 
         // 4. 校验 Redis 中 token 是否存在（用户是否已登出 / 被踢）
         String redisKey = String.format(TokenConstant.LOGIN_TOKEN_PREFIX, token);
@@ -82,11 +82,13 @@ public class TokenFilter implements GlobalFilter, Ordered {
                     }
                     // 5. Redis 中存在 → 正常放行
                     ServerWebExchange webExchange = exchange.mutate()
-                            .request(builder -> builder.header("user_info", finalUserInfo))
+                            .request(builder -> builder
+                                    .header("user_info", finalUserInfo)
+                                    .header("x-shortlink-gateway", "true"))
                             .build();
                     // redis 续期
-                    reactiveStringRedisTemplate.expire(redisKey, Duration.ofMillis(jwtUtils.getTtl()));
-                    return chain.filter(webExchange);
+                    return reactiveStringRedisTemplate.expire(redisKey, Duration.ofMillis(jwtUtils.getTtl()))
+                            .then(chain.filter(webExchange));
                 });
     }
 

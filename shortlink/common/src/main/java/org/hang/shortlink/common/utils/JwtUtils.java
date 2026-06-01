@@ -10,10 +10,6 @@ import io.jsonwebtoken.security.Keys;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.hang.shortlink.common.propreties.JwtProperties;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.boot.context.properties.EnableConfigurationProperties;
-import org.springframework.stereotype.Component;
 
 import javax.crypto.SecretKey;
 import java.nio.charset.StandardCharsets;
@@ -21,15 +17,15 @@ import java.util.Date;
 import java.util.Map;
 
 @Slf4j
-@Component
-@EnableConfigurationProperties(JwtProperties.class)
-@ConditionalOnProperty(prefix = "short.link.jwt", name = "secret-key")
 public class JwtUtils {
 
-    @Autowired
-    private JwtProperties jwtProperties;
+    private final JwtProperties jwtProperties;
 
     private SecretKey secretKey;
+
+    public JwtUtils(JwtProperties jwtProperties) {
+        this.jwtProperties = jwtProperties;
+    }
 
     @PostConstruct
     public void initSecretKey() {

@@ -519,26 +519,32 @@
         <div class="drawer-step2">
           <div class="edit-profile-card">
             <el-form ref="editProfileFormRef" :model="editProfileForm" :rules="editProfileRules" label-width="0" status-icon>
-              <div class="edit-field">
+              <el-form-item class="edit-field">
                 <span class="edit-field-label">用户名称</span>
                 <el-input v-model="editProfileForm.username" disabled />
-              </div>
-              <div class="edit-field">
+              </el-form-item>
+              <el-form-item class="edit-field" prop="phone">
                 <span class="edit-field-label">手机号</span>
                 <el-input v-model="editProfileForm.phone" placeholder="请输入手机号" maxlength="11" />
-              </div>
-              <div class="edit-field">
+              </el-form-item>
+              <el-form-item class="edit-field">
                 <span class="edit-field-label">姓名</span>
                 <el-input v-model="editProfileForm.realName" placeholder="请输入姓名" />
-              </div>
-              <div class="edit-field">
+              </el-form-item>
+              <el-form-item class="edit-field" prop="mail">
                 <span class="edit-field-label">邮箱</span>
                 <el-input v-model="editProfileForm.mail" placeholder="请输入邮箱" />
-              </div>
-              <div class="edit-field">
+              </el-form-item>
+              <el-form-item class="edit-field" prop="password">
                 <span class="edit-field-label">密码</span>
-                <el-input v-model="editProfileForm.password" type="password" placeholder="如需修改密码请填写" show-password />
-              </div>
+                <el-input
+                  v-model="editProfileForm.password"
+                  type="password"
+                  placeholder="如需修改密码，请输入至少8位且包含大小写字母、数字和特殊符号的新密码"
+                  show-password
+                />
+                <div class="field-tip">留空表示不修改密码；新密码至少8位，并同时包含大写字母、小写字母、数字和特殊符号。</div>
+              </el-form-item>
             </el-form>
             <div style="display: flex; gap: 12px; margin-top: 28px;">
               <el-button style="flex:1;border-radius:10px;height:42px;font-size:14px;" @click="profileMode = 'view'">取消</el-button>
@@ -603,6 +609,7 @@ const originUrl1 = ref()
 const orderIndex = ref(0)
 const { proxy } = getCurrentInstance()
 const API = proxy.$API
+const passwordPattern = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z\d]).{8,}$/
 const chartsInfoRef = ref()
 const chartsInfoTitle = ref()
 const chartsInfo = ref()
@@ -662,7 +669,20 @@ const editProfileRules = reactive({
     { pattern: /^([a-zA-Z]|[0-9])(\w|\-)+@[a-zA-Z0-9]+\.([a-zA-Z]{2,4})$/, message: '请输入正确的邮箱', trigger: 'blur' }
   ],
   password: [
-    { min: 8, max: 15, message: '密码长度请在8-15位之间', trigger: 'blur' }
+    {
+      validator: (rule, value, callback) => {
+        if (!value) {
+          callback()
+          return
+        }
+        if (!passwordPattern.test(value)) {
+          callback(new Error('密码需至少8位，且包含大写字母、小写字母、数字和特殊符号'))
+          return
+        }
+        callback()
+      },
+      trigger: 'blur'
+    }
   ]
 })
 const submitEditProfile = async () => {
@@ -2050,12 +2070,23 @@ $shadow-hover: 0 6px 20px rgba(0, 0, 0, 0.1);
   margin-bottom: 18px;
 }
 
+:deep(.edit-field.el-form-item) {
+  display: block;
+}
+
 .edit-field-label {
   display: block;
   font-size: 13px;
   font-weight: 500;
   color: #86909c;
   margin-bottom: 6px;
+}
+
+.field-tip {
+  margin-top: 6px;
+  line-height: 18px;
+  font-size: 12px;
+  color: $text-muted;
 }
 
 :deep(.edit-field .el-input__wrapper) {

@@ -1,5 +1,5 @@
 import axios from 'axios'
-import {getToken, getUsername} from '@/core/auth.js'
+import { getToken, getUsername, removeKey, removeUsername } from '@/core/auth.js'
 import {isNotEmpty} from '@/utils/plugins.js'
 import router from "@/router";
 import { ElMessage } from 'element-plus'
@@ -46,6 +46,9 @@ http.interceptors.response.use(
             if (err.response.status === 401) {
                 ElMessage.warning('登录已失效，请重新登录')
                 localStorage.removeItem('token')
+                localStorage.removeItem('username')
+                removeKey()
+                removeUsername()
                 router.push('/login')
             }
         } else {

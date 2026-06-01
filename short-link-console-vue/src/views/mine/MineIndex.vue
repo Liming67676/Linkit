@@ -83,11 +83,13 @@
           <el-input
             v-model="userInfoForm.password"
             placeholder="如需修改密码，请输入至少8位且包含大小写字母、数字和特殊符号的新密码"
+            show-password
             show-word-limit
             clearable
           >
             <template #prepend>密码</template>
           </el-input>
+          <div class="field-tip">留空表示不修改密码；新密码至少8位，并同时包含大写字母、小写字母、数字和特殊符号。</div>
         </el-form-item>
         <el-form-item>
           <div class="dialog-actions">
@@ -281,5 +283,12 @@ $border-color: #e5e6eb;
   display: flex;
   justify-content: flex-end;
   gap: 12px;
+}
+
+.field-tip {
+  margin-top: 6px;
+  line-height: 18px;
+  font-size: 12px;
+  color: $text-muted;
 }
 </style>

@@ -4,21 +4,6 @@ server:
 spring:
   cloud:
     gateway:
-      globalcors:
-        cors-configurations:
-          '[/**]':
-            allowedOrigins:
-              - https://admin.lnko.cn
-              - http://localhost:5173
-            allowedMethods:
-              - GET
-              - POST
-              - PUT
-              - DELETE
-              - OPTIONS
-            allowedHeaders: "*"
-            allowCredentials: true
-            maxAge: 3600
       routes:
         - id: admin-server
           uri: lb://shortlink-admin-service

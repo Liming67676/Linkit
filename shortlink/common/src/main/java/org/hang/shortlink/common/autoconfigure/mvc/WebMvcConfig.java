@@ -7,8 +7,10 @@ import io.swagger.v3.oas.models.info.Contact;
 import io.swagger.v3.oas.models.info.Info;
 import io.swagger.v3.oas.models.info.License;
 import org.hang.shortlink.common.autoconfigure.mvc.adivce.GlobalExceptionAdvice;
+import org.hang.shortlink.common.interceptor.GatewayAccessInterceptor;
 import org.hang.shortlink.common.interceptor.MvcInterceptor;
 import org.hang.shortlink.common.interceptor.RateLimitInterceptor;
+import org.hang.shortlink.common.propreties.GatewayAccessProperties;
 import org.hang.shortlink.common.propreties.RateLimitProperties;
 import org.redisson.api.RedissonClient;
 import org.springframework.beans.factory.ObjectProvider;
@@ -24,7 +26,7 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
 @Configuration
 @ConditionalOnClass(DispatcherServlet.class)
-@EnableConfigurationProperties(RateLimitProperties.class)
+@EnableConfigurationProperties({RateLimitProperties.class, GatewayAccessProperties.class})
 public class WebMvcConfig {
 
     @Bean
@@ -39,10 +41,22 @@ public class WebMvcConfig {
     }
 
     @Bean
-    public WebMvcConfigurer webMvcConfigurer(ObjectProvider<RateLimitInterceptor> rateLimitProvider) {
+    @ConditionalOnProperty(prefix = "short.link.gateway-access", name = "enabled", havingValue = "true")
+    public GatewayAccessInterceptor gatewayAccessInterceptor(GatewayAccessProperties gatewayAccessProperties, ObjectMapper objectMapper) {
+        return new GatewayAccessInterceptor(gatewayAccessProperties, objectMapper);
+    }
+
+    @Bean
+    public WebMvcConfigurer webMvcConfigurer(ObjectProvider<RateLimitInterceptor> rateLimitProvider,
+                                             ObjectProvider<GatewayAccessInterceptor> gatewayAccessProvider) {
         return new WebMvcConfigurer() {
             @Override
             public void addInterceptors(InterceptorRegistry registry) {
+                GatewayAccessInterceptor gatewayAccessInterceptor = gatewayAccessProvider.getIfAvailable();
+                if (gatewayAccessInterceptor != null) {
+                    registry.addInterceptor(gatewayAccessInterceptor)
+                            .addPathPatterns("/**");
+                }
                 registry.addInterceptor(new MvcInterceptor())
                         .excludePathPatterns("/page/**/*.html","/*.html");
                 RateLimitInterceptor rateLimitInterceptor = rateLimitProvider.getIfAvailable();

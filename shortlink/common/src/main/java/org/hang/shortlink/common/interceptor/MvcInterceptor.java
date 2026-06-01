@@ -5,6 +5,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.hang.shortlink.common.utils.UserContext;
 import org.springframework.util.StringUtils;
+import org.springframework.web.method.HandlerMethod;
 import org.springframework.web.servlet.HandlerInterceptor;
 import org.springframework.web.servlet.ModelAndView;
 
@@ -35,14 +36,29 @@ public class MvcInterceptor implements HandlerInterceptor {
         String userInfo = request.getHeader("user_info");
         String user = StringUtils.hasText(userInfo) ? userInfo : "anonymous";
         String path = request.getRequestURI();
-        String query = request.getQueryString();
+        String query = maskQuery(request.getQueryString());
         String fullPath = StringUtils.hasText(query) ? path + "?" + query : path;
+        String handlerName = getHandlerName(handler);
         if (ex != null) {
-            log.error("request error method={}, path={}, status={}, user={}, costMs={}",
-                    request.getMethod(), fullPath, response.getStatus(), user, costMs, ex);
+            log.error("request error handler={}, method={}, path={},  status={}, user={}, costMs={}",
+                    handlerName, request.getMethod(), fullPath, response.getStatus(), user, costMs, ex);
             return;
         }
-        log.info("request method={}, path={}, status={}, user={}, costMs={}",
-                request.getMethod(), fullPath, response.getStatus(), user, costMs);
+        log.info("handler={},request method={}, path={},  status={}, user={}, costMs={}",
+                handlerName, request.getMethod(), fullPath, response.getStatus(), user, costMs);
+    }
+
+    private String getHandlerName(Object handler) {
+        if (handler instanceof HandlerMethod handlerMethod) {
+            return handlerMethod.getBeanType().getName() + "#" + handlerMethod.getMethod().getName();
+        }
+        return String.valueOf(handler);
+    }
+
+    private String maskQuery(String queryString) {
+        if (!StringUtils.hasText(queryString)) {
+            return "";
+        }
+        return queryString.replaceAll("(?i)(password|token|secret|key)=([^&]*)", "$1=******");
     }
 }

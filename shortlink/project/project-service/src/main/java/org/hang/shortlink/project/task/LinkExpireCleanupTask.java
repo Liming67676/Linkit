@@ -5,10 +5,12 @@ import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.hang.shortlink.project.constant.RedisConstant;
 import org.hang.shortlink.project.mapper.LinkMapper;
 import org.hang.shortlink.project.pojo.po.Link;
 import org.redisson.api.RLock;
 import org.redisson.api.RedissonClient;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
@@ -27,6 +29,7 @@ public class LinkExpireCleanupTask {
 
     private final LinkMapper linkMapper;
     private final RedissonClient redissonClient;
+    private final StringRedisTemplate redisTemplate;
 
     // 单gid单次批量处理数量
     private static final int BATCH_SIZE = 1000;
@@ -92,6 +95,7 @@ public class LinkExpireCleanupTask {
 
                         linkMapper.update(null, updateWrapper);
                         totalClean += expiredLinks.size();
+                        redisTemplate.delete(String.format(RedisConstant.GROUP_SHORT_LINK_COUNT_KEY, gid));
                         pageNo++;
                     }
                 } catch (Exception e) {

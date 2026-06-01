@@ -36,7 +36,7 @@ Thumbs.db
 **/Dump_*.csv
 
 # Local/private environment files
-**/.env.local
+**/.env.dev
 **/.env.product
 **/.env.*.local
 **/*.local

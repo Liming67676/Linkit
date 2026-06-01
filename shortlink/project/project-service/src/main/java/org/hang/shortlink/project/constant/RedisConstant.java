@@ -12,6 +12,16 @@ public interface RedisConstant {
      */
     String FULL_SHORT_URL_KEY = "short-link:full-short-url:%s";
 
+    /**
+     * 分组有效短链接数量key
+     */
+    String GROUP_SHORT_LINK_COUNT_KEY = "short-link:group-count:%s";
+
+    /**
+     * 分组短链接数量缓存过期时间
+     */
+    int GROUP_SHORT_LINK_COUNT_EXPIRE_SECONDS = 3 * 60;
+
 
     // -------------- uv/ uip 统计 --------------
 

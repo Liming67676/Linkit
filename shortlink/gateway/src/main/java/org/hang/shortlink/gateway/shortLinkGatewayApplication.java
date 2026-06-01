@@ -14,8 +14,8 @@ import org.springframework.core.env.Environment;
  */
 @Slf4j
 @SpringBootApplication
-public class shortLinkGatewayApplication {
+public class ShortLinkGatewayApplication {
     public static void main(String[] args) {
-       SpringApplication.run(shortLinkGatewayApplication.class, args);
+       SpringApplication.run(ShortLinkGatewayApplication.class, args);
     }
 }

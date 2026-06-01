@@ -4,6 +4,7 @@ import cn.hutool.core.bean.BeanUtil;
 import cn.hutool.core.util.StrUtil;
 import jodd.util.StringUtil;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 import org.hang.shortlink.admin.mapper.UserMapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
@@ -42,7 +43,10 @@ import java.util.regex.Pattern;
  */
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements UserService {
+
+    private static final long SLOW_LOGIN_MILLIS = 500L;
 
     private final StringRedisTemplate stringRedisTemplate;
     private final JwtUtils jwtUtils;
@@ -171,31 +175,49 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
 
     @Override
     public UserLoginRespDto login(UserLoginDto loginDto) {
+        long startTime = System.nanoTime();
+        long dbCost;
+        long passwordCost;
+        long jwtCost;
+        long redisCost;
         // 检查
         if(loginDto == null || loginDto.getUsername().isBlank() || loginDto.getPassword().isBlank()){
             throw new ServiceException("用户名或密码不能为空");
         }
+        long dbStartTime = System.nanoTime();
         User user = lambdaQuery().eq(User::getUsername, loginDto.getUsername())
                 .one();
+        dbCost = elapsedMillis(dbStartTime);
         if(user == null){
             throw new ServiceException("用户不存在");
         }
+        long passwordStartTime = System.nanoTime();
         if(!PasswordEncoderUtil.matches(loginDto.getPassword(),user.getPassword())){
             throw new ServiceException("密码错误");
         }
+        passwordCost = elapsedMillis(passwordStartTime);
         HashMap<String, Object> claims = new HashMap<>();
         claims.put("username",user.getUsername());
+        long jwtStartTime = System.nanoTime();
         String token = jwtUtils.generateToken(claims);
+        jwtCost = elapsedMillis(jwtStartTime);
 
         // 将token存入Redis（支持多设备登录：每台设备独立token）
+        long redisStartTime = System.nanoTime();
         stringRedisTemplate.opsForValue().set(
                 String.format(TokenConstant.LOGIN_TOKEN_PREFIX, token),
                 user.getUsername(),
                 jwtUtils.getTtl(),
                 TimeUnit.MILLISECONDS
         );
+        redisCost = elapsedMillis(redisStartTime);
 
         UserLoginRespDto respDto = new UserLoginRespDto().setId(user.getId()).setToken(token);
+        long totalCost = elapsedMillis(startTime);
+        if (totalCost >= SLOW_LOGIN_MILLIS) {
+            log.info("login slow username={}, totalMs={}, dbMs={}, passwordMs={}, jwtMs={}, redisMs={}",
+                    user.getUsername(), totalCost, dbCost, passwordCost, jwtCost, redisCost);
+        }
         return respDto;
     }
 
@@ -214,6 +236,10 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         }
         String redisUsername = stringRedisTemplate.opsForValue().get(String.format(TokenConstant.LOGIN_TOKEN_PREFIX, token));
         return username.equals(redisUsername);
+    }
+
+    private long elapsedMillis(long startTime) {
+        return TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startTime);
     }
 
 }

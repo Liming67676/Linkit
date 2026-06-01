@@ -1,6 +1,6 @@
   org.hang.shortlink.common.autoconfigure.mybatis.MybatisConfig
   org.hang.shortlink.common.autoconfigure.redisson.RedisConfig
   org.hang.shortlink.common.autoconfigure.mvc.WebMvcConfig
-  org.hang.shortlink.common.utils.JwtUtils
+  org.hang.shortlink.common.autoconfigure.jwt.JwtAutoConfiguration
   org.hang.shortlink.common.autoconfigure.jackson.JacksonDateConfig
   org.hang.shortlink.common.autoconfigure.oss.OssConfig

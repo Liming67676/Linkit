@@ -36,11 +36,5 @@
             <artifactId>spring-cloud-starter-openfeign</artifactId>
             <scope>provided</scope>
         </dependency>
-        <!-- RabbitMQ：Feign降级补偿用 -->
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-amqp</artifactId>
-            <scope>provided</scope>
-        </dependency>
     </dependencies>
 </project>

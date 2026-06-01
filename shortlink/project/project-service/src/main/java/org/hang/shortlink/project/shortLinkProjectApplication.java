@@ -18,9 +18,9 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 @SpringBootApplication
 @MapperScan("org.hang.shortlink.project.mapper")
 @EnableScheduling // 开启定时任务
-public class shortLinkProjectApplication {
+public class ShortLinkProjectApplication {
     public static void main(String[] args) {
-        ConfigurableApplicationContext context = SpringApplication.run(shortLinkProjectApplication.class, args);
+        ConfigurableApplicationContext context = SpringApplication.run(ShortLinkProjectApplication.class, args);
 //        Environment env = context.getEnvironment();
 //        String port = env.getProperty("server.port", "8002");
 //

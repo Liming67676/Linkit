@@ -20,14 +20,17 @@ import org.hang.shortlink.project.pojo.po.Link;
 import org.hang.shortlink.project.service.IRecycleBinService;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Service
 @RequiredArgsConstructor
 public class RecycleBinServiceImpl extends ServiceImpl<RecycleBinMapper, Link> implements IRecycleBinService {
 
-    private StringRedisTemplate redisTemplate;
+    private final StringRedisTemplate redisTemplate;
 
     @Override
     public void saveRecycleBin(RecycleBinSaveRequestDto requestParam) {
@@ -47,7 +50,7 @@ public class RecycleBinServiceImpl extends ServiceImpl<RecycleBinMapper, Link> i
             throw new ServiceException("加入回收站失败");
         }
         // 2. 删除redis中缓存
-        redisTemplate.delete(String.format(RedisConstant.FULL_SHORT_URL_KEY, requestParam.getFullShortUrl()));
+        deleteLinkCache(requestParam.getFullShortUrl(), requestParam.getGid());
     }
 
     @Override
@@ -83,6 +86,7 @@ public class RecycleBinServiceImpl extends ServiceImpl<RecycleBinMapper, Link> i
         if(!updated){
             throw new ServiceException("恢复回收站失败");
         }
+        deleteGroupCountCache(requestParam.getGid());
 
     }
 
@@ -101,6 +105,31 @@ public class RecycleBinServiceImpl extends ServiceImpl<RecycleBinMapper, Link> i
         if(!removed){
             throw new ServiceException("删除回收站链接失败");
         }
+        deleteLinkCache(requestParam.getFullShortUrl(), requestParam.getGid());
 
+    }
+
+    private void deleteLinkCache(String fullShortUrl, String gid) {
+        deleteCache(List.of(
+                String.format(RedisConstant.FULL_SHORT_URL_KEY, fullShortUrl),
+                String.format(RedisConstant.GROUP_SHORT_LINK_COUNT_KEY, gid)
+        ));
+    }
+
+    private void deleteGroupCountCache(String gid) {
+        deleteCache(List.of(String.format(RedisConstant.GROUP_SHORT_LINK_COUNT_KEY, gid)));
+    }
+
+    private void deleteCache(List<String> keys) {
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    redisTemplate.delete(keys);
+                }
+            });
+        } else {
+            redisTemplate.delete(keys);
+        }
     }
 }

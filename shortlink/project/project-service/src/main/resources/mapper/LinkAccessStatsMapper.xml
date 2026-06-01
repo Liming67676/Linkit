@@ -133,8 +133,7 @@
             SUM(CASE WHEN date = CURDATE() THEN uv ELSE 0 END) AS today_uv,
             SUM(CASE WHEN date = CURDATE() THEN uip ELSE 0 END) AS today_uip
         FROM t_link_access_stats
-        WHERE #{gid}
-        AND full_short_url IN
+        WHERE full_short_url IN
         <foreach collection="fullShortUrls" item="url" open="(" separator="," close=")">
             #{url}
         </foreach>
