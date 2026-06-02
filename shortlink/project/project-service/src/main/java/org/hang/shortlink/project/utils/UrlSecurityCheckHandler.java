@@ -54,6 +54,7 @@ public class UrlSecurityCheckHandler {
     private static final String VERSION = "2020-12-29";
     private static final String SERVICE = "tms";
     private static final String REGION = "ap-guangzhou";
+    private static final long SLOW_TMS_CHECK_MILLIS = 800L;
 
     private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd").withZone(ZoneOffset.UTC);
 
@@ -170,6 +171,7 @@ public class UrlSecurityCheckHandler {
      * 腾讯云TMS文本检测（严格对齐官方文档，无修改）
      */
     private String checkByTencentTms(String url) {
+        long startTime = System.currentTimeMillis();
         UrlCheckProperties.TencentCms cmsConfig = urlCheckProperties.getTencentCms();
         if (cmsConfig == null || StrUtil.isBlank(cmsConfig.getSecretId())
                 || StrUtil.isBlank(cmsConfig.getSecretKey())
@@ -222,6 +224,7 @@ public class UrlSecurityCheckHandler {
 
             HttpEntity<String> entity = new HttpEntity<>(bodyJson, headers);
             ResponseEntity<String> response = restTemplate.postForEntity("https://" + ENDPOINT, entity, String.class);
+            logSlowTmsCheck(url, startTime);
 
             if (response.getBody() == null) {
                 return STATUS_SAFE;
@@ -245,8 +248,15 @@ public class UrlSecurityCheckHandler {
             return STATUS_SAFE;
 
         } catch (Exception e) {
-            log.error("[腾讯云TMS] 调用失败", e);
+            log.error("[腾讯云TMS] 调用失败, url={}, costMs={}", url, System.currentTimeMillis() - startTime, e);
             return STATUS_SAFE;
+        }
+    }
+
+    private void logSlowTmsCheck(String url, long startTime) {
+        long costMs = System.currentTimeMillis() - startTime;
+        if (costMs >= SLOW_TMS_CHECK_MILLIS) {
+            log.info("[腾讯云TMS] 检测耗时较长, url={}, costMs={}", url, costMs);
         }
     }
 

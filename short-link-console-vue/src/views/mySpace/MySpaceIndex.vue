@@ -759,14 +759,14 @@ const confirmLogout = async () => {
   logoutLoading.value = true
   try {
     await API.user.logout()
+    ElMessage.success('已安全退出')
+  } catch {
+    ElMessage.warning('服务端退出失败，已清除本地登录状态')
+  } finally {
     removeUsername()
     removeKey()
     logoutDrawer.value = false
-    ElMessage.success('已安全退出')
     router.push('/login')
-  } catch {
-    ElMessage.error('退出失败，请重试')
-  } finally {
     logoutLoading.value = false
   }
 }
@@ -1175,7 +1175,12 @@ const onAddLinkDrawerClose = () => {
 const onCreateLinkSubmit = () => {
   isAddLinkDrawer.value = false
   createLink1Ref.value?.initFormData()
-  getGroupInfo(queryPage)
+  const currentGroup = editableTabs.value?.[selectedIndex.value]
+  if (currentGroup) {
+    currentGroup.shortLinkCount = (currentGroup.shortLinkCount ?? 0) + 1
+    nums.value = currentGroup.shortLinkCount
+  }
+  queryPage()
 }
 const onCreateLinkCancel = () => {
   isAddLinkDrawer.value = false

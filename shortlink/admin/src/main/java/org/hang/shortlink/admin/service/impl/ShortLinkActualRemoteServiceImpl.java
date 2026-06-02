@@ -1,6 +1,7 @@
 package org.hang.shortlink.admin.service.impl;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.hang.shortlink.admin.service.ShortLinkActualRemoteService;
 import org.hang.shortlink.common.pojo.PageResult;
 import org.hang.shortlink.common.pojo.Result;
@@ -24,12 +25,22 @@ import java.util.List;
  */
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class ShortLinkActualRemoteServiceImpl implements ShortLinkActualRemoteService {
+
+    private static final long SLOW_CREATE_LINK_REMOTE_MILLIS = 800L;
 
     private final ShortLinkClient shortLinkClient;
     @Override
     public Result<LikCreateResponseDto> createShortLink(LinkCreateRequestDto createRequest) {
-        return shortLinkClient.createLink(createRequest);
+        long startTime = System.currentTimeMillis();
+        Result<LikCreateResponseDto> result = shortLinkClient.createLink(createRequest);
+        long costMs = System.currentTimeMillis() - startTime;
+        if (costMs >= SLOW_CREATE_LINK_REMOTE_MILLIS) {
+            log.info("admin create short link remote slow originUrl={}, gid={}, costMs={}",
+                    createRequest.getOriginUrl(), createRequest.getGid(), costMs);
+        }
+        return result;
     }
 
     @Override

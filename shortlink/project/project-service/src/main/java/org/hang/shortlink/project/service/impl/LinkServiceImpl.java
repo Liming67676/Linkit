@@ -78,7 +78,9 @@ public class LinkServiceImpl extends ServiceImpl<LinkMapper, Link> implements IL
 
     private static final String EMPTY_TITLE_CACHE_VALUE = "__EMPTY__";
 
-    private static final String UNREACHABLE_TITLE_CACHE_VALUE = "__UNREACHABLE__";
+    private static final String UNREACHABLE_TITLE_CACHE_VALUE = "__TITLE_NOT_EXISTS__";
+
+    private static final long TITLE_CACHE_TTL_SECONDS = 30L;
 
     private static final int FAVICON_FETCH_TIMEOUT_MS = 2000;
 
@@ -91,6 +93,8 @@ public class LinkServiceImpl extends ServiceImpl<LinkMapper, Link> implements IL
     private static final String DEFAULT_FAVICON_URL = "https://img.icons8.com/fluency/32/000000/link.png";
 
     private static final long FAVICON_CACHE_TTL_SECONDS = 30L;
+
+    private static final long SLOW_CREATE_LINK_MILLIS = 800L;
 
     private final ShortUrlGeneratorUtils shortUrlGeneratorUtils;
 
@@ -117,6 +121,12 @@ public class LinkServiceImpl extends ServiceImpl<LinkMapper, Link> implements IL
     @Transactional
     @Override
     public LikCreateResponseDto createLink(LinkCreateRequestDto dto) {
+        long startTime = System.currentTimeMillis();
+        long securityCheckCost = 0L;
+        long duplicateCheckCost = 0L;
+        long saveCost = 0L;
+        long mqCost = 0L;
+        long cacheDeleteCost = 0L;
         if (dto == null) {
             throw new ServiceException("创建短链接参数不足");
         }
@@ -131,16 +141,20 @@ public class LinkServiceImpl extends ServiceImpl<LinkMapper, Link> implements IL
         }
 
         // URL安全检查（黑名单/内容合规）
+        long securityCheckStartTime = System.currentTimeMillis();
         urlSecurityCheckHandler.checkUrl(dto.getOriginUrl());
+        securityCheckCost = elapsedMillis(securityCheckStartTime);
 
         // 同一个分组只能有唯一一个源地址
         String lockKey = "link:create:" + dto.getGid() + ":" + dto.getOriginUrl();
         RLock lock = redissonClient.getLock(lockKey);
         lock.lock(); // 阻塞锁
         try {
+            long duplicateCheckStartTime = System.currentTimeMillis();
             Long count = lambdaQuery().eq(Link::getGid, dto.getGid())
                     .eq(Link::getOriginUrl, dto.getOriginUrl())
                     .count();
+            duplicateCheckCost = elapsedMillis(duplicateCheckStartTime);
             if (!count.equals(0L)) {
                 throw new ServiceException("该分组下已存在此原始链接，请勿重复创建！");
             }
@@ -166,11 +180,14 @@ public class LinkServiceImpl extends ServiceImpl<LinkMapper, Link> implements IL
             } else {
                 link.setValidDate(LocalDateTime.now().plusDays(30));// 默认30天有效期
             }
+            long saveStartTime = System.currentTimeMillis();
             boolean saved = save(link);
+            saveCost = elapsedMillis(saveStartTime);
             if (!saved) {
                 throw new ServiceException("新增当个短链接失败");
             }
             // 异步发送 MQ 消息：获取 favicon 并更新
+            long mqStartTime = System.currentTimeMillis();
             rabbitMQProducer.sendFaviconMessage(FaviconMessage.builder()
                     .fullShortUrl(link.getFullShortUrl())
                     .originUrl(link.getOriginUrl())
@@ -181,7 +198,15 @@ public class LinkServiceImpl extends ServiceImpl<LinkMapper, Link> implements IL
                     .fullShortUrl(link.getFullShortUrl())
                     .gid(link.getGid())
                     .build());
+            mqCost = elapsedMillis(mqStartTime);
+            long cacheDeleteStartTime = System.currentTimeMillis();
             deleteGroupCountCache(link.getGid());
+            cacheDeleteCost = elapsedMillis(cacheDeleteStartTime);
+            long totalCost = elapsedMillis(startTime);
+            if (totalCost >= SLOW_CREATE_LINK_MILLIS) {
+                log.info("create short link slow originUrl={}, gid={}, totalCostMs={}, securityCheckMs={}, duplicateCheckMs={}, saveMs={}, mqMs={}, cacheDeleteMs={}",
+                        dto.getOriginUrl(), dto.getGid(), totalCost, securityCheckCost, duplicateCheckCost, saveCost, mqCost, cacheDeleteCost);
+            }
             return new LikCreateResponseDto(link.getGid(), link.getOriginUrl(), link.getFullShortUrl());
         } finally {
             if (lock.isHeldByCurrentThread()) {
@@ -716,13 +741,12 @@ public class LinkServiceImpl extends ServiceImpl<LinkMapper, Link> implements IL
         String cachedTitle = redisTemplate.opsForValue().get(titleCacheKey);
         if (StringUtils.hasText(cachedTitle)) {
             if (UNREACHABLE_TITLE_CACHE_VALUE.equals(cachedTitle)) {
-                throw new ServiceException("目标网站不可访问，请检查链接是否正确");
+                return "";
             }
             return EMPTY_TITLE_CACHE_VALUE.equals(cachedTitle) ? "" : cachedTitle;
         }
         TitleProbeResult probeResult = probeTitleUrl(targetUrl);
         if (TitleProbeResult.NOT_EXISTS.equals(probeResult)) {
-            redisTemplate.opsForValue().set(titleCacheKey, UNREACHABLE_TITLE_CACHE_VALUE, 1, TimeUnit.MINUTES);
             throw new ServiceException("目标网站不可访问，请检查链接是否正确");
         }
         try {
@@ -739,13 +763,13 @@ public class LinkServiceImpl extends ServiceImpl<LinkMapper, Link> implements IL
             redisTemplate.opsForValue().set(
                     titleCacheKey,
                     StringUtils.hasText(title) ? title : EMPTY_TITLE_CACHE_VALUE,
-                    StringUtils.hasText(title) ? 1 : 10,
-                    StringUtils.hasText(title) ? TimeUnit.DAYS : TimeUnit.MINUTES
+                    TITLE_CACHE_TTL_SECONDS,
+                    TimeUnit.SECONDS
             );
             return title;
         } catch (IOException e) {
             log.warn("获取URL标题失败, url={}", targetUrl, e);
-            redisTemplate.opsForValue().set(titleCacheKey, EMPTY_TITLE_CACHE_VALUE, 1, TimeUnit.MINUTES);
+            redisTemplate.opsForValue().set(titleCacheKey, EMPTY_TITLE_CACHE_VALUE, TITLE_CACHE_TTL_SECONDS, TimeUnit.SECONDS);
             return "";
         }
     }
@@ -781,15 +805,13 @@ public class LinkServiceImpl extends ServiceImpl<LinkMapper, Link> implements IL
             connection.setInstanceFollowRedirects(true);
             connection.setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36");
             int status = connection.getResponseCode();
-            if (status == HttpURLConnection.HTTP_NOT_FOUND || status == HttpURLConnection.HTTP_GONE) {
-                return TitleProbeResult.NOT_EXISTS;
-            }
             if ((status >= HttpURLConnection.HTTP_OK && status < HttpURLConnection.HTTP_BAD_REQUEST)
                     || status == HttpURLConnection.HTTP_FORBIDDEN
                     || status == HttpURLConnection.HTTP_UNAUTHORIZED
                     || status == HttpURLConnection.HTTP_BAD_METHOD) {
                 return TitleProbeResult.EXISTS;
             }
+            log.warn("URL标题探针状态不确定, url={}, status={}", url, status);
             return TitleProbeResult.UNKNOWN;
         } catch (UnknownHostException e) {
             log.warn("URL标题探针域名解析失败, url={}, message={}", url, e.getMessage());
@@ -844,6 +866,10 @@ public class LinkServiceImpl extends ServiceImpl<LinkMapper, Link> implements IL
             redisTemplate.opsForValue().set(cacheKey, DEFAULT_FAVICON_URL, FAVICON_CACHE_TTL_SECONDS, TimeUnit.SECONDS);
         }
         return DEFAULT_FAVICON_URL;
+    }
+
+    private long elapsedMillis(long startTime) {
+        return System.currentTimeMillis() - startTime;
     }
 
     private String getSiteRootUrl(String url) throws IOException {

@@ -102,7 +102,7 @@ public class UserController {
     @Operation(summary = "检查登录状态", description = "检查当前用户是否已登录")
     public Result<Boolean> isLogin(HttpServletRequest request) {
         String username = UserContext.getUserInfo();
-        String token = request.getHeader("token");
+        String token = getToken(request);
         Boolean isLogin = userService.checkLogin(username, token);
         return Result.success(isLogin);
     }
@@ -113,8 +113,13 @@ public class UserController {
     @DeleteMapping("/api/short-link/admin/v1/user/logout")
     @Operation(summary = "退出登录", description = "用户退出登录接口")
     public Result logout(HttpServletRequest request) {
-        String token = request.getHeader("token");
+        String token = getToken(request);
         userService.logout(token);
         return Result.success();
+    }
+
+    private String getToken(HttpServletRequest request) {
+        String token = request.getHeader("Token");
+        return token == null ? request.getHeader("token") : token;
     }
 }
