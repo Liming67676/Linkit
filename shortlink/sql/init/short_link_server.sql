@@ -11,7 +11,7 @@
  Target Server Version : 80046 (8.0.46)
  File Encoding         : 65001
 
- Date: 02/06/2026 11:58:45
+ Date: 02/06/2026 12:49:38
 */
 
 SET NAMES utf8mb4;
@@ -41,11 +41,11 @@ CREATE TABLE `t_link_0`  (
   `favicon` varchar(256) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_as_cs NULL DEFAULT NULL COMMENT '网站图标',
   PRIMARY KEY (`id`) USING BTREE,
   UNIQUE INDEX `uk_domain_short_uri_del`(`domain` ASC, `short_uri` ASC, `del_flag` ASC) USING BTREE,
+  UNIQUE INDEX `uk_gid_origin_url_hash_del`(`gid` ASC, `origin_url_hash` ASC, `del_flag` ASC) USING BTREE,
   INDEX `idx_gid_origin_url_del`(`gid` ASC, `origin_url`(255) ASC, `del_flag` ASC) USING BTREE,
   INDEX `idx_gid_enable_del_update`(`gid` ASC, `enable_status` ASC, `del_flag` ASC, `update_time` DESC, `id` ASC) USING BTREE,
   INDEX `idx_gid_full_short_url_active_valid`(`gid` ASC, `full_short_url` ASC, `enable_status` ASC, `del_flag` ASC, `valid_date` ASC) USING BTREE,
-  INDEX `idx_gid_enable_del_valid`(`gid` ASC, `enable_status` ASC, `del_flag` ASC, `valid_date` ASC, `id` ASC) USING BTREE,
-  UNIQUE INDEX `uk_gid_origin_url_hash_del`(`gid` ASC, `origin_url_hash` ASC, `del_flag` ASC) USING BTREE
+  INDEX `idx_gid_enable_del_valid`(`gid` ASC, `enable_status` ASC, `del_flag` ASC, `valid_date` ASC, `id` ASC) USING BTREE
 ) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_as_cs COMMENT = '短链接主表' ROW_FORMAT = DYNAMIC;
 
 -- ----------------------------
@@ -72,11 +72,11 @@ CREATE TABLE `t_link_1`  (
   `favicon` varchar(256) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_as_cs NULL DEFAULT NULL COMMENT '网站图标',
   PRIMARY KEY (`id`) USING BTREE,
   UNIQUE INDEX `uk_domain_short_uri_del`(`domain` ASC, `short_uri` ASC, `del_flag` ASC) USING BTREE,
+  UNIQUE INDEX `uk_gid_origin_url_hash_del`(`gid` ASC, `origin_url_hash` ASC, `del_flag` ASC) USING BTREE,
   INDEX `idx_gid_origin_url_del`(`gid` ASC, `origin_url`(255) ASC, `del_flag` ASC) USING BTREE,
   INDEX `idx_gid_enable_del_update`(`gid` ASC, `enable_status` ASC, `del_flag` ASC, `update_time` DESC, `id` ASC) USING BTREE,
   INDEX `idx_gid_full_short_url_active_valid`(`gid` ASC, `full_short_url` ASC, `enable_status` ASC, `del_flag` ASC, `valid_date` ASC) USING BTREE,
-  INDEX `idx_gid_enable_del_valid`(`gid` ASC, `enable_status` ASC, `del_flag` ASC, `valid_date` ASC, `id` ASC) USING BTREE,
-  UNIQUE INDEX `uk_gid_origin_url_hash_del`(`gid` ASC, `origin_url_hash` ASC, `del_flag` ASC) USING BTREE
+  INDEX `idx_gid_enable_del_valid`(`gid` ASC, `enable_status` ASC, `del_flag` ASC, `valid_date` ASC, `id` ASC) USING BTREE
 ) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_as_cs COMMENT = '短链接主表' ROW_FORMAT = DYNAMIC;
 
 -- ----------------------------
@@ -103,11 +103,11 @@ CREATE TABLE `t_link_10`  (
   `favicon` varchar(256) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_as_cs NULL DEFAULT NULL COMMENT '网站图标',
   PRIMARY KEY (`id`) USING BTREE,
   UNIQUE INDEX `uk_domain_short_uri_del`(`domain` ASC, `short_uri` ASC, `del_flag` ASC) USING BTREE,
+  UNIQUE INDEX `uk_gid_origin_url_hash_del`(`gid` ASC, `origin_url_hash` ASC, `del_flag` ASC) USING BTREE,
   INDEX `idx_gid_origin_url_del`(`gid` ASC, `origin_url`(255) ASC, `del_flag` ASC) USING BTREE,
   INDEX `idx_gid_enable_del_update`(`gid` ASC, `enable_status` ASC, `del_flag` ASC, `update_time` DESC, `id` ASC) USING BTREE,
   INDEX `idx_gid_full_short_url_active_valid`(`gid` ASC, `full_short_url` ASC, `enable_status` ASC, `del_flag` ASC, `valid_date` ASC) USING BTREE,
-  INDEX `idx_gid_enable_del_valid`(`gid` ASC, `enable_status` ASC, `del_flag` ASC, `valid_date` ASC, `id` ASC) USING BTREE,
-  UNIQUE INDEX `uk_gid_origin_url_hash_del`(`gid` ASC, `origin_url_hash` ASC, `del_flag` ASC) USING BTREE
+  INDEX `idx_gid_enable_del_valid`(`gid` ASC, `enable_status` ASC, `del_flag` ASC, `valid_date` ASC, `id` ASC) USING BTREE
 ) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_as_cs COMMENT = '短链接主表' ROW_FORMAT = DYNAMIC;
 
 -- ----------------------------
@@ -134,11 +134,11 @@ CREATE TABLE `t_link_11`  (
   `favicon` varchar(256) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_as_cs NULL DEFAULT NULL COMMENT '网站图标',
   PRIMARY KEY (`id`) USING BTREE,
   UNIQUE INDEX `uk_domain_short_uri_del`(`domain` ASC, `short_uri` ASC, `del_flag` ASC) USING BTREE,
+  UNIQUE INDEX `uk_gid_origin_url_hash_del`(`gid` ASC, `origin_url_hash` ASC, `del_flag` ASC) USING BTREE,
   INDEX `idx_gid_origin_url_del`(`gid` ASC, `origin_url`(255) ASC, `del_flag` ASC) USING BTREE,
   INDEX `idx_gid_enable_del_update`(`gid` ASC, `enable_status` ASC, `del_flag` ASC, `update_time` DESC, `id` ASC) USING BTREE,
   INDEX `idx_gid_full_short_url_active_valid`(`gid` ASC, `full_short_url` ASC, `enable_status` ASC, `del_flag` ASC, `valid_date` ASC) USING BTREE,
-  INDEX `idx_gid_enable_del_valid`(`gid` ASC, `enable_status` ASC, `del_flag` ASC, `valid_date` ASC, `id` ASC) USING BTREE,
-  UNIQUE INDEX `uk_gid_origin_url_hash_del`(`gid` ASC, `origin_url_hash` ASC, `del_flag` ASC) USING BTREE
+  INDEX `idx_gid_enable_del_valid`(`gid` ASC, `enable_status` ASC, `del_flag` ASC, `valid_date` ASC, `id` ASC) USING BTREE
 ) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_as_cs COMMENT = '短链接主表' ROW_FORMAT = DYNAMIC;
 
 -- ----------------------------
@@ -165,11 +165,11 @@ CREATE TABLE `t_link_12`  (
   `favicon` varchar(256) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_as_cs NULL DEFAULT NULL COMMENT '网站图标',
   PRIMARY KEY (`id`) USING BTREE,
   UNIQUE INDEX `uk_domain_short_uri_del`(`domain` ASC, `short_uri` ASC, `del_flag` ASC) USING BTREE,
+  UNIQUE INDEX `uk_gid_origin_url_hash_del`(`gid` ASC, `origin_url_hash` ASC, `del_flag` ASC) USING BTREE,
   INDEX `idx_gid_origin_url_del`(`gid` ASC, `origin_url`(255) ASC, `del_flag` ASC) USING BTREE,
   INDEX `idx_gid_enable_del_update`(`gid` ASC, `enable_status` ASC, `del_flag` ASC, `update_time` DESC, `id` ASC) USING BTREE,
   INDEX `idx_gid_full_short_url_active_valid`(`gid` ASC, `full_short_url` ASC, `enable_status` ASC, `del_flag` ASC, `valid_date` ASC) USING BTREE,
-  INDEX `idx_gid_enable_del_valid`(`gid` ASC, `enable_status` ASC, `del_flag` ASC, `valid_date` ASC, `id` ASC) USING BTREE,
-  UNIQUE INDEX `uk_gid_origin_url_hash_del`(`gid` ASC, `origin_url_hash` ASC, `del_flag` ASC) USING BTREE
+  INDEX `idx_gid_enable_del_valid`(`gid` ASC, `enable_status` ASC, `del_flag` ASC, `valid_date` ASC, `id` ASC) USING BTREE
 ) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_as_cs COMMENT = '短链接主表' ROW_FORMAT = DYNAMIC;
 
 -- ----------------------------
@@ -196,11 +196,11 @@ CREATE TABLE `t_link_13`  (
   `favicon` varchar(256) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_as_cs NULL DEFAULT NULL COMMENT '网站图标',
   PRIMARY KEY (`id`) USING BTREE,
   UNIQUE INDEX `uk_domain_short_uri_del`(`domain` ASC, `short_uri` ASC, `del_flag` ASC) USING BTREE,
+  UNIQUE INDEX `uk_gid_origin_url_hash_del`(`gid` ASC, `origin_url_hash` ASC, `del_flag` ASC) USING BTREE,
   INDEX `idx_gid_origin_url_del`(`gid` ASC, `origin_url`(255) ASC, `del_flag` ASC) USING BTREE,
   INDEX `idx_gid_enable_del_update`(`gid` ASC, `enable_status` ASC, `del_flag` ASC, `update_time` DESC, `id` ASC) USING BTREE,
   INDEX `idx_gid_full_short_url_active_valid`(`gid` ASC, `full_short_url` ASC, `enable_status` ASC, `del_flag` ASC, `valid_date` ASC) USING BTREE,
-  INDEX `idx_gid_enable_del_valid`(`gid` ASC, `enable_status` ASC, `del_flag` ASC, `valid_date` ASC, `id` ASC) USING BTREE,
-  UNIQUE INDEX `uk_gid_origin_url_hash_del`(`gid` ASC, `origin_url_hash` ASC, `del_flag` ASC) USING BTREE
+  INDEX `idx_gid_enable_del_valid`(`gid` ASC, `enable_status` ASC, `del_flag` ASC, `valid_date` ASC, `id` ASC) USING BTREE
 ) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_as_cs COMMENT = '短链接主表' ROW_FORMAT = DYNAMIC;
 
 -- ----------------------------
@@ -227,11 +227,11 @@ CREATE TABLE `t_link_14`  (
   `favicon` varchar(256) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_as_cs NULL DEFAULT NULL COMMENT '网站图标',
   PRIMARY KEY (`id`) USING BTREE,
   UNIQUE INDEX `uk_domain_short_uri_del`(`domain` ASC, `short_uri` ASC, `del_flag` ASC) USING BTREE,
+  UNIQUE INDEX `uk_gid_origin_url_hash_del`(`gid` ASC, `origin_url_hash` ASC, `del_flag` ASC) USING BTREE,
   INDEX `idx_gid_origin_url_del`(`gid` ASC, `origin_url`(255) ASC, `del_flag` ASC) USING BTREE,
   INDEX `idx_gid_enable_del_update`(`gid` ASC, `enable_status` ASC, `del_flag` ASC, `update_time` DESC, `id` ASC) USING BTREE,
   INDEX `idx_gid_full_short_url_active_valid`(`gid` ASC, `full_short_url` ASC, `enable_status` ASC, `del_flag` ASC, `valid_date` ASC) USING BTREE,
-  INDEX `idx_gid_enable_del_valid`(`gid` ASC, `enable_status` ASC, `del_flag` ASC, `valid_date` ASC, `id` ASC) USING BTREE,
-  UNIQUE INDEX `uk_gid_origin_url_hash_del`(`gid` ASC, `origin_url_hash` ASC, `del_flag` ASC) USING BTREE
+  INDEX `idx_gid_enable_del_valid`(`gid` ASC, `enable_status` ASC, `del_flag` ASC, `valid_date` ASC, `id` ASC) USING BTREE
 ) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_as_cs COMMENT = '短链接主表' ROW_FORMAT = DYNAMIC;
 
 -- ----------------------------
@@ -258,11 +258,11 @@ CREATE TABLE `t_link_15`  (
   `favicon` varchar(256) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_as_cs NULL DEFAULT NULL COMMENT '网站图标',
   PRIMARY KEY (`id`) USING BTREE,
   UNIQUE INDEX `uk_domain_short_uri_del`(`domain` ASC, `short_uri` ASC, `del_flag` ASC) USING BTREE,
+  UNIQUE INDEX `uk_gid_origin_url_hash_del`(`gid` ASC, `origin_url_hash` ASC, `del_flag` ASC) USING BTREE,
   INDEX `idx_gid_origin_url_del`(`gid` ASC, `origin_url`(255) ASC, `del_flag` ASC) USING BTREE,
   INDEX `idx_gid_enable_del_update`(`gid` ASC, `enable_status` ASC, `del_flag` ASC, `update_time` DESC, `id` ASC) USING BTREE,
   INDEX `idx_gid_full_short_url_active_valid`(`gid` ASC, `full_short_url` ASC, `enable_status` ASC, `del_flag` ASC, `valid_date` ASC) USING BTREE,
-  INDEX `idx_gid_enable_del_valid`(`gid` ASC, `enable_status` ASC, `del_flag` ASC, `valid_date` ASC, `id` ASC) USING BTREE,
-  UNIQUE INDEX `uk_gid_origin_url_hash_del`(`gid` ASC, `origin_url_hash` ASC, `del_flag` ASC) USING BTREE
+  INDEX `idx_gid_enable_del_valid`(`gid` ASC, `enable_status` ASC, `del_flag` ASC, `valid_date` ASC, `id` ASC) USING BTREE
 ) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_as_cs COMMENT = '短链接主表' ROW_FORMAT = DYNAMIC;
 
 -- ----------------------------
@@ -289,11 +289,11 @@ CREATE TABLE `t_link_2`  (
   `favicon` varchar(256) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_as_cs NULL DEFAULT NULL COMMENT '网站图标',
   PRIMARY KEY (`id`) USING BTREE,
   UNIQUE INDEX `uk_domain_short_uri_del`(`domain` ASC, `short_uri` ASC, `del_flag` ASC) USING BTREE,
+  UNIQUE INDEX `uk_gid_origin_url_hash_del`(`gid` ASC, `origin_url_hash` ASC, `del_flag` ASC) USING BTREE,
   INDEX `idx_gid_origin_url_del`(`gid` ASC, `origin_url`(255) ASC, `del_flag` ASC) USING BTREE,
   INDEX `idx_gid_enable_del_update`(`gid` ASC, `enable_status` ASC, `del_flag` ASC, `update_time` DESC, `id` ASC) USING BTREE,
   INDEX `idx_gid_full_short_url_active_valid`(`gid` ASC, `full_short_url` ASC, `enable_status` ASC, `del_flag` ASC, `valid_date` ASC) USING BTREE,
-  INDEX `idx_gid_enable_del_valid`(`gid` ASC, `enable_status` ASC, `del_flag` ASC, `valid_date` ASC, `id` ASC) USING BTREE,
-  UNIQUE INDEX `uk_gid_origin_url_hash_del`(`gid` ASC, `origin_url_hash` ASC, `del_flag` ASC) USING BTREE
+  INDEX `idx_gid_enable_del_valid`(`gid` ASC, `enable_status` ASC, `del_flag` ASC, `valid_date` ASC, `id` ASC) USING BTREE
 ) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_as_cs COMMENT = '短链接主表' ROW_FORMAT = DYNAMIC;
 
 -- ----------------------------
@@ -320,11 +320,11 @@ CREATE TABLE `t_link_3`  (
   `favicon` varchar(256) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_as_cs NULL DEFAULT NULL COMMENT '网站图标',
   PRIMARY KEY (`id`) USING BTREE,
   UNIQUE INDEX `uk_domain_short_uri_del`(`domain` ASC, `short_uri` ASC, `del_flag` ASC) USING BTREE,
+  UNIQUE INDEX `uk_gid_origin_url_hash_del`(`gid` ASC, `origin_url_hash` ASC, `del_flag` ASC) USING BTREE,
   INDEX `idx_gid_origin_url_del`(`gid` ASC, `origin_url`(255) ASC, `del_flag` ASC) USING BTREE,
   INDEX `idx_gid_enable_del_update`(`gid` ASC, `enable_status` ASC, `del_flag` ASC, `update_time` DESC, `id` ASC) USING BTREE,
   INDEX `idx_gid_full_short_url_active_valid`(`gid` ASC, `full_short_url` ASC, `enable_status` ASC, `del_flag` ASC, `valid_date` ASC) USING BTREE,
-  INDEX `idx_gid_enable_del_valid`(`gid` ASC, `enable_status` ASC, `del_flag` ASC, `valid_date` ASC, `id` ASC) USING BTREE,
-  UNIQUE INDEX `uk_gid_origin_url_hash_del`(`gid` ASC, `origin_url_hash` ASC, `del_flag` ASC) USING BTREE
+  INDEX `idx_gid_enable_del_valid`(`gid` ASC, `enable_status` ASC, `del_flag` ASC, `valid_date` ASC, `id` ASC) USING BTREE
 ) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_as_cs COMMENT = '短链接主表' ROW_FORMAT = DYNAMIC;
 
 -- ----------------------------
@@ -351,11 +351,11 @@ CREATE TABLE `t_link_4`  (
   `favicon` varchar(256) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_as_cs NULL DEFAULT NULL COMMENT '网站图标',
   PRIMARY KEY (`id`) USING BTREE,
   UNIQUE INDEX `uk_domain_short_uri_del`(`domain` ASC, `short_uri` ASC, `del_flag` ASC) USING BTREE,
+  UNIQUE INDEX `uk_gid_origin_url_hash_del`(`gid` ASC, `origin_url_hash` ASC, `del_flag` ASC) USING BTREE,
   INDEX `idx_gid_origin_url_del`(`gid` ASC, `origin_url`(255) ASC, `del_flag` ASC) USING BTREE,
   INDEX `idx_gid_enable_del_update`(`gid` ASC, `enable_status` ASC, `del_flag` ASC, `update_time` DESC, `id` ASC) USING BTREE,
   INDEX `idx_gid_full_short_url_active_valid`(`gid` ASC, `full_short_url` ASC, `enable_status` ASC, `del_flag` ASC, `valid_date` ASC) USING BTREE,
-  INDEX `idx_gid_enable_del_valid`(`gid` ASC, `enable_status` ASC, `del_flag` ASC, `valid_date` ASC, `id` ASC) USING BTREE,
-  UNIQUE INDEX `uk_gid_origin_url_hash_del`(`gid` ASC, `origin_url_hash` ASC, `del_flag` ASC) USING BTREE
+  INDEX `idx_gid_enable_del_valid`(`gid` ASC, `enable_status` ASC, `del_flag` ASC, `valid_date` ASC, `id` ASC) USING BTREE
 ) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_as_cs COMMENT = '短链接主表' ROW_FORMAT = DYNAMIC;
 
 -- ----------------------------
@@ -382,11 +382,11 @@ CREATE TABLE `t_link_5`  (
   `favicon` varchar(256) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_as_cs NULL DEFAULT NULL COMMENT '网站图标',
   PRIMARY KEY (`id`) USING BTREE,
   UNIQUE INDEX `uk_domain_short_uri_del`(`domain` ASC, `short_uri` ASC, `del_flag` ASC) USING BTREE,
+  UNIQUE INDEX `uk_gid_origin_url_hash_del`(`gid` ASC, `origin_url_hash` ASC, `del_flag` ASC) USING BTREE,
   INDEX `idx_gid_origin_url_del`(`gid` ASC, `origin_url`(255) ASC, `del_flag` ASC) USING BTREE,
   INDEX `idx_gid_enable_del_update`(`gid` ASC, `enable_status` ASC, `del_flag` ASC, `update_time` DESC, `id` ASC) USING BTREE,
   INDEX `idx_gid_full_short_url_active_valid`(`gid` ASC, `full_short_url` ASC, `enable_status` ASC, `del_flag` ASC, `valid_date` ASC) USING BTREE,
-  INDEX `idx_gid_enable_del_valid`(`gid` ASC, `enable_status` ASC, `del_flag` ASC, `valid_date` ASC, `id` ASC) USING BTREE,
-  UNIQUE INDEX `uk_gid_origin_url_hash_del`(`gid` ASC, `origin_url_hash` ASC, `del_flag` ASC) USING BTREE
+  INDEX `idx_gid_enable_del_valid`(`gid` ASC, `enable_status` ASC, `del_flag` ASC, `valid_date` ASC, `id` ASC) USING BTREE
 ) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_as_cs COMMENT = '短链接主表' ROW_FORMAT = DYNAMIC;
 
 -- ----------------------------
@@ -413,11 +413,11 @@ CREATE TABLE `t_link_6`  (
   `favicon` varchar(256) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_as_cs NULL DEFAULT NULL COMMENT '网站图标',
   PRIMARY KEY (`id`) USING BTREE,
   UNIQUE INDEX `uk_domain_short_uri_del`(`domain` ASC, `short_uri` ASC, `del_flag` ASC) USING BTREE,
+  UNIQUE INDEX `uk_gid_origin_url_hash_del`(`gid` ASC, `origin_url_hash` ASC, `del_flag` ASC) USING BTREE,
   INDEX `idx_gid_origin_url_del`(`gid` ASC, `origin_url`(255) ASC, `del_flag` ASC) USING BTREE,
   INDEX `idx_gid_enable_del_update`(`gid` ASC, `enable_status` ASC, `del_flag` ASC, `update_time` DESC, `id` ASC) USING BTREE,
   INDEX `idx_gid_full_short_url_active_valid`(`gid` ASC, `full_short_url` ASC, `enable_status` ASC, `del_flag` ASC, `valid_date` ASC) USING BTREE,
-  INDEX `idx_gid_enable_del_valid`(`gid` ASC, `enable_status` ASC, `del_flag` ASC, `valid_date` ASC, `id` ASC) USING BTREE,
-  UNIQUE INDEX `uk_gid_origin_url_hash_del`(`gid` ASC, `origin_url_hash` ASC, `del_flag` ASC) USING BTREE
+  INDEX `idx_gid_enable_del_valid`(`gid` ASC, `enable_status` ASC, `del_flag` ASC, `valid_date` ASC, `id` ASC) USING BTREE
 ) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_as_cs COMMENT = '短链接主表' ROW_FORMAT = DYNAMIC;
 
 -- ----------------------------
@@ -444,11 +444,11 @@ CREATE TABLE `t_link_7`  (
   `favicon` varchar(256) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_as_cs NULL DEFAULT NULL COMMENT '网站图标',
   PRIMARY KEY (`id`) USING BTREE,
   UNIQUE INDEX `uk_domain_short_uri_del`(`domain` ASC, `short_uri` ASC, `del_flag` ASC) USING BTREE,
+  UNIQUE INDEX `uk_gid_origin_url_hash_del`(`gid` ASC, `origin_url_hash` ASC, `del_flag` ASC) USING BTREE,
   INDEX `idx_gid_origin_url_del`(`gid` ASC, `origin_url`(255) ASC, `del_flag` ASC) USING BTREE,
   INDEX `idx_gid_enable_del_update`(`gid` ASC, `enable_status` ASC, `del_flag` ASC, `update_time` DESC, `id` ASC) USING BTREE,
   INDEX `idx_gid_full_short_url_active_valid`(`gid` ASC, `full_short_url` ASC, `enable_status` ASC, `del_flag` ASC, `valid_date` ASC) USING BTREE,
-  INDEX `idx_gid_enable_del_valid`(`gid` ASC, `enable_status` ASC, `del_flag` ASC, `valid_date` ASC, `id` ASC) USING BTREE,
-  UNIQUE INDEX `uk_gid_origin_url_hash_del`(`gid` ASC, `origin_url_hash` ASC, `del_flag` ASC) USING BTREE
+  INDEX `idx_gid_enable_del_valid`(`gid` ASC, `enable_status` ASC, `del_flag` ASC, `valid_date` ASC, `id` ASC) USING BTREE
 ) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_as_cs COMMENT = '短链接主表' ROW_FORMAT = DYNAMIC;
 
 -- ----------------------------
@@ -475,11 +475,11 @@ CREATE TABLE `t_link_8`  (
   `favicon` varchar(256) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_as_cs NULL DEFAULT NULL COMMENT '网站图标',
   PRIMARY KEY (`id`) USING BTREE,
   UNIQUE INDEX `uk_domain_short_uri_del`(`domain` ASC, `short_uri` ASC, `del_flag` ASC) USING BTREE,
+  UNIQUE INDEX `uk_gid_origin_url_hash_del`(`gid` ASC, `origin_url_hash` ASC, `del_flag` ASC) USING BTREE,
   INDEX `idx_gid_origin_url_del`(`gid` ASC, `origin_url`(255) ASC, `del_flag` ASC) USING BTREE,
   INDEX `idx_gid_enable_del_update`(`gid` ASC, `enable_status` ASC, `del_flag` ASC, `update_time` DESC, `id` ASC) USING BTREE,
   INDEX `idx_gid_full_short_url_active_valid`(`gid` ASC, `full_short_url` ASC, `enable_status` ASC, `del_flag` ASC, `valid_date` ASC) USING BTREE,
-  INDEX `idx_gid_enable_del_valid`(`gid` ASC, `enable_status` ASC, `del_flag` ASC, `valid_date` ASC, `id` ASC) USING BTREE,
-  UNIQUE INDEX `uk_gid_origin_url_hash_del`(`gid` ASC, `origin_url_hash` ASC, `del_flag` ASC) USING BTREE
+  INDEX `idx_gid_enable_del_valid`(`gid` ASC, `enable_status` ASC, `del_flag` ASC, `valid_date` ASC, `id` ASC) USING BTREE
 ) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_as_cs COMMENT = '短链接主表' ROW_FORMAT = DYNAMIC;
 
 -- ----------------------------
@@ -506,11 +506,11 @@ CREATE TABLE `t_link_9`  (
   `favicon` varchar(256) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_as_cs NULL DEFAULT NULL COMMENT '网站图标',
   PRIMARY KEY (`id`) USING BTREE,
   UNIQUE INDEX `uk_domain_short_uri_del`(`domain` ASC, `short_uri` ASC, `del_flag` ASC) USING BTREE,
+  UNIQUE INDEX `uk_gid_origin_url_hash_del`(`gid` ASC, `origin_url_hash` ASC, `del_flag` ASC) USING BTREE,
   INDEX `idx_gid_origin_url_del`(`gid` ASC, `origin_url`(255) ASC, `del_flag` ASC) USING BTREE,
   INDEX `idx_gid_enable_del_update`(`gid` ASC, `enable_status` ASC, `del_flag` ASC, `update_time` DESC, `id` ASC) USING BTREE,
   INDEX `idx_gid_full_short_url_active_valid`(`gid` ASC, `full_short_url` ASC, `enable_status` ASC, `del_flag` ASC, `valid_date` ASC) USING BTREE,
-  INDEX `idx_gid_enable_del_valid`(`gid` ASC, `enable_status` ASC, `del_flag` ASC, `valid_date` ASC, `id` ASC) USING BTREE,
-  UNIQUE INDEX `uk_gid_origin_url_hash_del`(`gid` ASC, `origin_url_hash` ASC, `del_flag` ASC) USING BTREE
+  INDEX `idx_gid_enable_del_valid`(`gid` ASC, `enable_status` ASC, `del_flag` ASC, `valid_date` ASC, `id` ASC) USING BTREE
 ) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_as_cs COMMENT = '短链接主表' ROW_FORMAT = DYNAMIC;
 
 -- ----------------------------

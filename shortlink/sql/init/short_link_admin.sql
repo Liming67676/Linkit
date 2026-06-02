@@ -11,7 +11,7 @@
  Target Server Version : 80046 (8.0.46)
  File Encoding         : 65001
 
- Date: 01/06/2026 16:50:57
+ Date: 02/06/2026 12:49:30
 */
 
 SET NAMES utf8mb4;
@@ -658,4 +658,3 @@ CREATE TABLE `t_user_9`  (
 ) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_as_cs COMMENT = '用户表' ROW_FORMAT = DYNAMIC;
 
 SET FOREIGN_KEY_CHECKS = 1;
-
