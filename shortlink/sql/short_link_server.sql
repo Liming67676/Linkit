@@ -38,7 +38,7 @@ BEGIN
             '  `describe` varchar(1024) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_as_cs DEFAULT NULL COMMENT ''短链接描述'',',
             '  `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT ''创建时间'',',
             '  `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT ''更新时间'',',
-            '  `del_flag` tinyint(1) NOT NULL DEFAULT 0 COMMENT ''删除标识 0-未删除 1-已删除'',',
+            '  `del_flag` bigint NOT NULL DEFAULT 0 COMMENT ''删除标识 0-未删除 删除后为当前记录ID'',',
             '  `favicon` varchar(256) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_as_cs DEFAULT NULL COMMENT ''网站图标'',',
             '  PRIMARY KEY (`id`) USING BTREE,',
             '  UNIQUE KEY `uk_domain_short_uri_del` (`domain`, `short_uri`, `del_flag`) USING BTREE,',

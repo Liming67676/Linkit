@@ -125,10 +125,10 @@ public class Link implements Serializable {
     private String favicon;
 
     /**
-     * 删除标识 0：未删除 1：已删除
+     * 删除标识 0：未删除 删除后写入当前记录ID，避免短链接多次逻辑删除时唯一键冲突
      */
-    @Schema(description = "删除标识，0：未删除 1：已删除")
-    @TableLogic
+    @Schema(description = "删除标识，0：未删除 删除后为当前记录ID")
+    @TableLogic(value = "0", delval = "id")
     @Builder.Default
-    private Boolean delFlag = false;
+    private Long delFlag = 0L;
 }
