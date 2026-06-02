@@ -92,13 +92,131 @@ rabbitmq-conf.yaml
 short-link-gateway-interceptor.yaml
 ```
 
-二维码、地理位置解析、URL 白名单等功能还会用到：
+最小模板如下，按本机环境替换即可：
+
+```yaml
+# redis-shared.yaml
+spring:
+  data:
+    redis:
+      host: 127.0.0.1
+      port: 6379
+      password:
+      database: 0
+      timeout: 3000ms
+```
+
+```yaml
+# short-link-jwt.yaml
+short:
+  link:
+    jwt:
+      secret-key: replace-with-a-random-secret
+      ttl: 86400000
+      token-name: Token
+```
+
+```yaml
+# rabbitmq-conf.yaml
+spring:
+  rabbitmq:
+    host: 127.0.0.1
+    port: 5672
+    username: guest
+    password: guest
+    virtual-host: /
+```
+
+```yaml
+# short-link-gateway-interceptor.yaml
+short:
+  link:
+    gateway-access:
+      enabled: true
+      header-name: x-shortlink-gateway
+      header-value: true
+      exclude-path:
+        - /page/**
+        - /doc.html
+        - /webjars/**
+        - /swagger-ui/**
+        - /v3/api-docs/**
+        - /actuator/**
+        - /api/short-link/admin/v1/user/login
+        - /api/short-link/admin/v1/user/register
+        - /api/short-link/admin/v1/user/has-username
+        - /api/short-link/admin/v1/user/check-login
+```
+
+各模块依赖关系：
+
+| 模块 | Nacos 配置 |
+| --- | --- |
+| gateway | `redis-shared.yaml`、`short-link-jwt.yaml`、`short-link-gateway-interceptor.yaml` |
+| admin | `redis-shared.yaml`、`short-link-jwt.yaml`、`short-link-oss.yaml`、`rate.yaml` |
+| project-service | `redis-shared.yaml`、`rabbitmq-conf.yaml`、`whitelist-domains.yaml`、`short-link-gaode.yaml` |
+
+其中二维码、地理位置解析、URL 白名单等功能会用到：
 
 ```text
 short-link-oss.yaml
 whitelist-domains.yaml
 short-link-gaode.yaml
 rate.yaml
+```
+
+对应模板：
+
+```yaml
+# short-link-oss.yaml
+short:
+  link:
+    oss:
+      endpoint: your-oss-endpoint
+      bucket: your-bucket
+      region: your-region
+      access-key-id: your-access-key-id
+      access-key-secret: your-access-key-secret
+```
+
+```yaml
+# whitelist-domains.yaml
+short:
+  link:
+    url-check:
+      enabled: true
+      whitelist-enabled: false
+      blacklist-domains: []
+      whitelist-domains: []
+      cache-seconds: 30
+      tencent-cms:
+        secret-id:
+        secret-key:
+        biz-type:
+```
+
+```yaml
+# short-link-gaode.yaml
+short:
+  link:
+    gaode:
+      access-key:
+      api-url: https://restapi.amap.com/v3/ip?ip=%s&output=json&key=%s
+```
+
+```yaml
+# rate.yaml
+short:
+  link:
+    rate-limit:
+      enabled: true
+      access-qps: 300
+      create-qps: 30
+      include-paths:
+        - /api/short-link/**
+      create-paths:
+        - /api/short-link/admin/v1/create
+        - /api/short-link/v1/create
 ```
 
 ### 3. 启动后端
