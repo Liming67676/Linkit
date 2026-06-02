@@ -36,12 +36,15 @@ public class RabbitMQConfig {
     public static final String FAVICON_ROUTING_KEY = "short.link.favicon";
     public static final String GOTO_QUEUE = "short.link.goto.queue";
     public static final String GOTO_ROUTING_KEY = "short.link.goto";
+    public static final String URL_SECURITY_QUEUE = "short.link.url.security.queue";
+    public static final String URL_SECURITY_ROUTING_KEY = "short.link.url.security";
 
     // ==================== 死信队列统一配置 ====================
     public static final String DLX_EXCHANGE = "short.link.direct.dlx";
     public static final String STATS_DLQ = "short.link.stats.dlq";
     public static final String FAVICON_DLQ = "short.link.favicon.dlq";
     public static final String GOTO_DLQ = "short.link.goto.dlq";
+    public static final String URL_SECURITY_DLQ = "short.link.url.security.dlq";
 
     // ==================== 交换机 ====================
     @Bean
@@ -79,6 +82,14 @@ public class RabbitMQConfig {
         return new Queue(GOTO_QUEUE, true, false, false, args);
     }
 
+    @Bean
+    public Queue urlSecurityQueue() {
+        Map<String, Object> args = new HashMap<>();
+        args.put("x-dead-letter-exchange", DLX_EXCHANGE);
+        args.put("x-dead-letter-routing-key", URL_SECURITY_DLQ);
+        return new Queue(URL_SECURITY_QUEUE, true, false, false, args);
+    }
+
     // ==================== 死信队列 ====================
     @Bean
     public Queue statsDlq() { return new Queue(STATS_DLQ, true); }
@@ -86,15 +97,19 @@ public class RabbitMQConfig {
     public Queue faviconDlq() { return new Queue(FAVICON_DLQ, true); }
     @Bean
     public Queue gotoDlq() { return new Queue(GOTO_DLQ, true); }
+    @Bean
+    public Queue urlSecurityDlq() { return new Queue(URL_SECURITY_DLQ, true); }
 
     // ==================== 绑定 ====================
     @Bean public Binding statsBind() { return BindingBuilder.bind(statsQueue()).to(shortLinkExchange()).with(STATS_ROUTING_KEY); }
     @Bean public Binding faviconBind() { return BindingBuilder.bind(faviconQueue()).to(shortLinkExchange()).with(FAVICON_ROUTING_KEY); }
     @Bean public Binding gotoBind() { return BindingBuilder.bind(gotoQueue()).to(shortLinkExchange()).with(GOTO_ROUTING_KEY); }
+    @Bean public Binding urlSecurityBind() { return BindingBuilder.bind(urlSecurityQueue()).to(shortLinkExchange()).with(URL_SECURITY_ROUTING_KEY); }
 
     @Bean public Binding statsDlqBind() { return BindingBuilder.bind(statsDlq()).to(deadLetterExchange()).with(STATS_DLQ); }
     @Bean public Binding faviconDlqBind() { return BindingBuilder.bind(faviconDlq()).to(deadLetterExchange()).with(FAVICON_DLQ); }
     @Bean public Binding gotoDlqBind() { return BindingBuilder.bind(gotoDlq()).to(deadLetterExchange()).with(GOTO_DLQ); }
+    @Bean public Binding urlSecurityDlqBind() { return BindingBuilder.bind(urlSecurityDlq()).to(deadLetterExchange()).with(URL_SECURITY_DLQ); }
 
     // ==================== Feign降级补偿队列 ====================
     public static final String RECYCLE_BIN_SAVE_QUEUE = "short.link.recycle.save.queue";

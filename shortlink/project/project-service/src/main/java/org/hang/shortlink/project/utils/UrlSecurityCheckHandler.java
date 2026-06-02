@@ -137,20 +137,26 @@ public class UrlSecurityCheckHandler {
                 throw new RuntimeException("该域名已被加入黑名单，禁止创建短链接");
             }
 
-            // 3. 无黑白名单规则 → 腾讯云内容安全检测
-            String checkResult = checkByTencentTms(originUrl);
-            redisTemplate.opsForValue().set(cacheKey, checkResult, urlCheckProperties.getCacheSeconds(), TimeUnit.SECONDS);
-
-            if (STATUS_UNSAFE.equals(checkResult)) {
-                throw new RuntimeException("该链接已被腾讯云内容安全标记为不安全，无法创建短链接");
-            }
-
         } catch (RuntimeException e) {
             throw e;
         } catch (Exception e) {
             log.error("[URL安全校验] 链接解析/校验异常，url：{}", originUrl, e);
             throw new RuntimeException("链接校验失败，请检查链接格式后重试");
         }
+    }
+
+    public boolean checkUrlByTencentTms(String originUrl) {
+        String cacheKey = URL_CHECK_CACHE_PREFIX + SecureUtil.md5(originUrl);
+        String cacheResult = redisTemplate.opsForValue().get(cacheKey);
+        if (STATUS_UNSAFE.equals(cacheResult)) {
+            return false;
+        }
+        if (STATUS_SAFE.equals(cacheResult)) {
+            return true;
+        }
+        String checkResult = checkByTencentTms(originUrl);
+        redisTemplate.opsForValue().set(cacheKey, checkResult, urlCheckProperties.getCacheSeconds(), TimeUnit.SECONDS);
+        return !STATUS_UNSAFE.equals(checkResult);
     }
 
     /**

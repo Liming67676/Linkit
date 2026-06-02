@@ -29,7 +29,7 @@ BEGIN
             '  `sort_order` int NOT NULL DEFAULT 0 COMMENT ''分组排序'',',
             '  `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT ''创建时间'',',
             '  `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT ''更新时间'',',
-            '  `del_flag` tinyint(1) NOT NULL DEFAULT 0 COMMENT ''删除标识 0-未删除 1-已删除'',',
+            '  `del_flag` bigint NOT NULL DEFAULT 0 COMMENT ''删除标识 0-未删除 删除后为当前记录ID'',',
             '  PRIMARY KEY (`id`) USING BTREE,',
             '  UNIQUE KEY `uk_gid` (`gid`) USING BTREE,',
             '  UNIQUE KEY `uk_username_name_del` (`username`, `name`, `del_flag`) USING BTREE,',
@@ -96,3 +96,4 @@ CALL create_t_user_tables();
 DROP PROCEDURE IF EXISTS create_t_user_tables;
 
 SET FOREIGN_KEY_CHECKS = 1;
+

@@ -34,7 +34,7 @@ import org.hang.shortlink.project.service.*;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import org.hang.shortlink.project.utils.*;
 import org.hang.shortlink.project.mq.dto.FaviconMessage;
-import org.hang.shortlink.project.mq.dto.LinkGotoMessage;
+import org.hang.shortlink.project.mq.dto.UrlSecurityMessage;
 import org.hang.shortlink.project.mq.dto.StatsMessage;
 import org.hang.shortlink.project.mq.producer.RabbitMQProducer;
 import org.jsoup.Jsoup;
@@ -81,6 +81,8 @@ public class LinkServiceImpl extends ServiceImpl<LinkMapper, Link> implements IL
     private static final String UNREACHABLE_TITLE_CACHE_VALUE = "__TITLE_NOT_EXISTS__";
 
     private static final long TITLE_CACHE_TTL_SECONDS = 30L;
+
+    private static final long SHORT_LINK_GOTO_CACHE_TTL_SECONDS = 5 * 60L;
 
     private static final int FAVICON_FETCH_TIMEOUT_MS = 2000;
 
@@ -186,18 +188,10 @@ public class LinkServiceImpl extends ServiceImpl<LinkMapper, Link> implements IL
             if (!saved) {
                 throw new ServiceException("新增当个短链接失败");
             }
-            // 异步发送 MQ 消息：获取 favicon 并更新
+            // 同步写入跳转关系，辅助任务等事务提交后再发送
             long mqStartTime = System.currentTimeMillis();
-            rabbitMQProducer.sendFaviconMessage(FaviconMessage.builder()
-                    .fullShortUrl(link.getFullShortUrl())
-                    .originUrl(link.getOriginUrl())
-                    .gid(link.getGid())
-                    .build());
-            // 异步发送 MQ 消息：写入 LinkGoto
-            rabbitMQProducer.sendGotoMessage(LinkGotoMessage.builder()
-                    .fullShortUrl(link.getFullShortUrl())
-                    .gid(link.getGid())
-                    .build());
+            saveLinkGoto(link.getFullShortUrl(), link.getGid());
+            sendAuxiliaryMessagesAfterCommit(link.getFullShortUrl(), link.getOriginUrl(), link.getGid());
             mqCost = elapsedMillis(mqStartTime);
             long cacheDeleteStartTime = System.currentTimeMillis();
             deleteGroupCountCache(link.getGid());
@@ -228,14 +222,16 @@ public class LinkServiceImpl extends ServiceImpl<LinkMapper, Link> implements IL
 
         // 2. 构建批量参数对象
         List<LinkCreateRequestDto> requestDtoList = new ArrayList<>();
+        Set<String> checkedOriginUrls = new HashSet<>();
         for (int i = 0; i < originUrls.size(); i++) {
             // 排除不是http:// 或https:// 开头的短链接
             if(!originUrls.get(i).startsWith("http://") && !originUrls.get(i).startsWith("https://")){
                 throw new ServiceException("请输入http://或者https://开头的短链接");
             }
-            // URL安全检查（黑名单/内容合规）
-            urlSecurityCheckHandler.checkUrl(originUrls.get(i));
             String originUrl = originUrls.get(i);
+            if (checkedOriginUrls.add(originUrl)) {
+                urlSecurityCheckHandler.checkUrl(originUrl);
+            }
             String describe = describes.get(i);
             if (StrUtil.isBlank(originUrl)) {
                 log.error("原始链接为空，跳过创建：索引{}", i);
@@ -299,17 +295,10 @@ public class LinkServiceImpl extends ServiceImpl<LinkMapper, Link> implements IL
                     .map(link -> new LinkBaseInfo(link.getGid(), link.getOriginUrl(), link.getFullShortUrl()))
                     .collect(Collectors.toList());
 
-            // 9. 异步通过MQ批量写入LinkGoto + 获取favicon
+            // 9. 同步写入LinkGoto，事务提交后异步获取favicon和URL安全检测
             for (Link link : linkList) {
-                rabbitMQProducer.sendFaviconMessage(FaviconMessage.builder()
-                        .fullShortUrl(link.getFullShortUrl())
-                        .originUrl(link.getOriginUrl())
-                        .gid(link.getGid())
-                        .build());
-                rabbitMQProducer.sendGotoMessage(LinkGotoMessage.builder()
-                        .fullShortUrl(link.getFullShortUrl())
-                        .gid(link.getGid())
-                        .build());
+                saveLinkGoto(link.getFullShortUrl(), link.getGid());
+                sendAuxiliaryMessagesAfterCommit(link.getFullShortUrl(), link.getOriginUrl(), link.getGid());
             }
             deleteGroupCountCache(gid);
 
@@ -340,6 +329,14 @@ public class LinkServiceImpl extends ServiceImpl<LinkMapper, Link> implements IL
         urlSecurityCheckHandler.checkUrl(dto.getOriginUrl());
         // 0. gid不变直接更新
         if(StrUtil.isNotEmpty(dto.getOriginGid()) && dto.getOriginGid().equals(dto.getGid())){
+            Link oldLink = lambdaQuery()
+                    .eq(Link::getGid, dto.getOriginGid())
+                    .eq(Link::getFullShortUrl, dto.getFullShortUrl())
+                    .eq(Link::getEnableStatus, 0)
+                    .one();
+            if (oldLink == null) {
+                throw new ServiceException("短链接不存在");
+            }
             boolean updated = lambdaUpdate().eq(Link::getGid, dto.getOriginGid())
                     .eq(Link::getFullShortUrl, dto.getFullShortUrl())
                     .set(StrUtil.isNotEmpty(dto.getOriginUrl()), Link::getOriginUrl, dto.getOriginUrl())
@@ -353,6 +350,9 @@ public class LinkServiceImpl extends ServiceImpl<LinkMapper, Link> implements IL
                 throw new ServiceException("短链接更新失败");
             }
             deleteGroupCountCache(dto.getOriginGid());
+            if (!oldLink.getOriginUrl().equals(dto.getOriginUrl())) {
+                sendAuxiliaryMessagesAfterCommit(dto.getFullShortUrl(), dto.getOriginUrl(), dto.getGid());
+            }
             return true;
         }
 
@@ -365,6 +365,7 @@ public class LinkServiceImpl extends ServiceImpl<LinkMapper, Link> implements IL
         if (link == null) {
             throw new ServiceException("短链接不存在");
         }
+        String oldOriginUrl = link.getOriginUrl();
 
         // 2. 分组+原始链接唯一校验
         boolean needCheck = !link.getGid().equals(dto.getGid()) || !link.getOriginUrl().equals(dto.getOriginUrl());
@@ -402,22 +403,14 @@ public class LinkServiceImpl extends ServiceImpl<LinkMapper, Link> implements IL
         // 5. 插入新数据
         link.setId(null);
         boolean saved_1 = save(link);
-        // 异步通过MQ写入新LinkGoto
-        rabbitMQProducer.sendGotoMessage(LinkGotoMessage.builder()
-                .fullShortUrl(link.getFullShortUrl())
-                .gid(link.getGid())
-                .build());
         if (!saved_1) {
             throw new ServiceException("短链接更新失败");
         }
+        saveLinkGoto(link.getFullShortUrl(), link.getGid());
         deleteGroupCountCache(dto.getOriginGid(), link.getGid());
         // 6. 如果原始链接变化，异步通过MQ获取新favicon
-        if (!link.getOriginUrl().equals(dto.getOriginUrl())) {
-            rabbitMQProducer.sendFaviconMessage(FaviconMessage.builder()
-                    .fullShortUrl(link.getFullShortUrl())
-                    .originUrl(dto.getOriginUrl())
-                    .gid(link.getGid())
-                    .build());
+        if (!oldOriginUrl.equals(dto.getOriginUrl())) {
+            sendAuxiliaryMessagesAfterCommit(link.getFullShortUrl(), dto.getOriginUrl(), link.getGid());
         }
 
         return true;
@@ -646,7 +639,7 @@ public class LinkServiceImpl extends ServiceImpl<LinkMapper, Link> implements IL
             LinkGoto linkGoto = linkGotoService.getOne(new LambdaQueryWrapper<LinkGoto>().eq(LinkGoto::getFullShortUrl, fullShortUrl));
             if (linkGoto == null) {
                 // 缓存空值防穿透
-                redisTemplate.opsForValue().set(redisKey, "null", 3, TimeUnit.MINUTES);
+                redisTemplate.opsForValue().set(redisKey, "null", SHORT_LINK_GOTO_CACHE_TTL_SECONDS, TimeUnit.SECONDS);
                 response.sendRedirect("/page/notfound");
                 return;
             }
@@ -659,14 +652,14 @@ public class LinkServiceImpl extends ServiceImpl<LinkMapper, Link> implements IL
                     .ge(Link::getValidDate, LocalDateTime.now()));
 
             if (link == null) {
-                redisTemplate.opsForValue().set(redisKey, "null", 3, TimeUnit.MINUTES);
+                redisTemplate.opsForValue().set(redisKey, "null", SHORT_LINK_GOTO_CACHE_TTL_SECONDS, TimeUnit.SECONDS);
                 response.sendRedirect("/page/notfound");
                 return;
             }
 
             // 5. 查询成功，设置缓存
             originUrl = link.getOriginUrl();
-            redisTemplate.opsForValue().set(redisKey, originUrl, 30, TimeUnit.MINUTES);
+            redisTemplate.opsForValue().set(redisKey, originUrl, SHORT_LINK_GOTO_CACHE_TTL_SECONDS, TimeUnit.SECONDS);
 
             // 统计 + 点击数 + 重定向
             handleRedirectAndStats(fullShortUrl, originUrl, request, response);
@@ -729,6 +722,41 @@ public class LinkServiceImpl extends ServiceImpl<LinkMapper, Link> implements IL
             throw new ServiceException("短链接点击数更新失败");
         }
 
+    }
+
+    private void saveLinkGoto(String fullShortUrl, String gid) {
+        boolean saved = linkGotoService.save(LinkGoto.builder()
+                .fullShortUrl(fullShortUrl)
+                .gid(gid)
+                .build());
+        if (!saved) {
+            throw new ServiceException("短链接跳转关系写入失败");
+        }
+    }
+
+    private void sendAuxiliaryMessagesAfterCommit(String fullShortUrl, String originUrl, String gid) {
+        Runnable task = () -> {
+            rabbitMQProducer.sendFaviconMessage(FaviconMessage.builder()
+                    .fullShortUrl(fullShortUrl)
+                    .originUrl(originUrl)
+                    .gid(gid)
+                    .build());
+            rabbitMQProducer.sendUrlSecurityMessage(UrlSecurityMessage.builder()
+                    .fullShortUrl(fullShortUrl)
+                    .originUrl(originUrl)
+                    .gid(gid)
+                    .build());
+        };
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    task.run();
+                }
+            });
+            return;
+        }
+        task.run();
     }
 
     @Override

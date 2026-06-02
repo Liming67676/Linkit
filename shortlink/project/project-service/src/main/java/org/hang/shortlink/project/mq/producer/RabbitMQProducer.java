@@ -5,6 +5,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.hang.shortlink.project.mq.dto.FaviconMessage;
 import org.hang.shortlink.project.mq.dto.LinkGotoMessage;
 import org.hang.shortlink.project.mq.dto.StatsMessage;
+import org.hang.shortlink.project.mq.dto.UrlSecurityMessage;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.stereotype.Component;
 
@@ -50,6 +51,17 @@ public class RabbitMQProducer {
             rabbitTemplate.convertAndSend(EXCHANGE, GOTO_ROUTING_KEY, message);
         } catch (Exception e) {
             log.error("[MQ生产者] 发送LinkGoto消息失败: {}", message.getFullShortUrl(), e);
+        }
+    }
+
+    /**
+     * 发送URL安全异步检测消息
+     */
+    public void sendUrlSecurityMessage(UrlSecurityMessage message) {
+        try {
+            rabbitTemplate.convertAndSend(EXCHANGE, URL_SECURITY_ROUTING_KEY, message);
+        } catch (Exception e) {
+            log.error("[MQ生产者] 发送URL安全检测消息失败: {}", message.getFullShortUrl(), e);
         }
     }
 }

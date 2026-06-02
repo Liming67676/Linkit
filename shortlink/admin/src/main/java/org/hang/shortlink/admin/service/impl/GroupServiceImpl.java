@@ -127,7 +127,7 @@ public class GroupServiceImpl extends ServiceImpl<GroupMapper, Group> implements
         String gid = reqDto.getGid();
         String name = reqDto.getName();
         Integer sortOrder = reqDto.getSortOrder();
-        if(gid.isBlank()){
+        if(StrUtil.isBlank(gid)){
             throw new ServiceException("更新分组参数错误");
         }
         String username = UserContext.getUserInfo();
@@ -135,18 +135,23 @@ public class GroupServiceImpl extends ServiceImpl<GroupMapper, Group> implements
             throw new ServiceException("请登录后重试");
         }
         // 同一用户分组名唯一
-        if(!name.isBlank()){
-            Long count = lambdaQuery().eq(Group::getName, name)
-                    .eq(Group::getUsername, username).count();
-            if(!count.equals(0L)){
+        if(StrUtil.isNotBlank(name)){
+            Long count = lambdaQuery()
+                    .eq(Group::getName, name)
+                    .eq(Group::getUsername, username)
+                    .ne(Group::getGid, gid)
+                    .count();
+            if(count != null && count > 0){
                 throw new ServiceException("分组已存在");
             }
         }
         // 更新
         boolean updated = lambdaUpdate()
-                .set(Group::getName, name)
+                .set(StrUtil.isNotBlank(name), Group::getName, name)
                 .set(sortOrder != null,Group::getSortOrder,sortOrder)
-                .eq(Group::getGid, gid).update();
+                .eq(Group::getGid, gid)
+                .eq(Group::getUsername, username)
+                .update();
         if(!updated){
             throw new ServiceException("更新分组失败");
         }
