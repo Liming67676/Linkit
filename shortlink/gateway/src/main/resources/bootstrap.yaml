@@ -2,7 +2,7 @@ spring:
   application:
     name: shortlink-gateway
   profiles:
-    active: local
+    active: product
   cloud:
     nacos:
       server-addr: ${cloud.nacos.server-addr}

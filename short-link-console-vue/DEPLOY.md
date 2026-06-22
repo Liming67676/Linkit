@@ -26,7 +26,7 @@ npm run build
 dist/
 ```
 
-生产环境接口地址来自 [`.env.production`](D:/quanzhan/offer/short-link-console-vue/.env.production)：
+生产环境接口地址来自 [`.env.product`](./.env.product)：
 
 ```env
 VITE_BASE_API='https://api.lnko.cn/api/short-link/admin'

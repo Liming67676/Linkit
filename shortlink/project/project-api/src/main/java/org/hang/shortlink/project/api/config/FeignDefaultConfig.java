@@ -32,6 +32,7 @@ public class FeignDefaultConfig {
         return new RequestInterceptor() {
             @Override
             public void apply(RequestTemplate template) {
+                template.header("x-shortlink-gateway", "true");
                 // 获取登录用户
                 String username = UserContext.getUserInfo();
                 if(username == null) {
