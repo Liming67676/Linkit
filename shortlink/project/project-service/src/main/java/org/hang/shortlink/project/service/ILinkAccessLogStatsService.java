@@ -83,6 +83,12 @@ public interface ILinkAccessLogStatsService extends IService<LinkAccessLogStats>
      */
     java.util.Map<String, Integer> countDistinctVisitorBatch(List<String> fullShortUrls, LocalDateTime start, LocalDateTime end);
 
+    /**
+     * 列表页：批量获取每个短链接的去重访客数，返回 fullShortUrl -> {uv, uip}
+     * 带短 TTL 缓存，避免每次翻页都去扫分片日志表
+     */
+    java.util.Map<String, java.util.Map<String, Integer>> getPageDistinctVisitor(List<String> fullShortUrls);
+
 
     /**
      * 分页查询访问记录（支持 单个短链接 / 分组GID 查询）

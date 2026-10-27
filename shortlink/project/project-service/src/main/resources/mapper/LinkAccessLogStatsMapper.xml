@@ -79,6 +79,16 @@
         GROUP BY full_short_url, user, ip
     </select>
 
+    <!-- 单个短链接的累计去重访客数：只路由到一个分片，聚合在库内完成，不传输明细行。
+         日志表里 user 字段就是 ip（无登录体系，用 IP 作为访客标识），
+         所以只算一次 COUNT(DISTINCT ip) 即可同时得到 uv/uip，且能命中 (url, ip, create_time) 索引 -->
+    <select id="selectVisitorCount" resultType="java.util.Map">
+        SELECT
+            COUNT(DISTINCT ip) AS cnt
+        FROM t_link_access_log_stats
+        WHERE full_short_url = #{fullShortUrl}
+    </select>
+
     <!-- 批量查询高频访问IP Top10 -->
     <select id="selectTopIpStatsBatch" resultType="java.util.Map">
         SELECT

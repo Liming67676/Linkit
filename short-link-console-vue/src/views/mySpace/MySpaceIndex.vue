@@ -105,6 +105,8 @@
           <span class="recycle-count">共{{ recycleBinNums }}条短链接</span>
         </div>
         <!-- 表格 -->
+        <!-- 切换分组时用顶部细进度条代替遮罩：旧数据保持可见可操作，避免"卡住"的观感 -->
+        <div class="page-progress" :class="{ active: tableLoading }"></div>
         <el-table :data="tableData" height="calc(100vh - 280px)" style="width: 100%"
           :header-cell-style="{ background: '#fafbfc', color: '#606266', fontWeight: 600 }"
           :default-sort="{ prop: 'createTime', order: 'descending' }"
@@ -201,8 +203,8 @@
                   <CaretBottom class="el-icon" />
                 </span>
                 <template #dropdown>
-                  <el-dropdown-item @click="pageParams.orderTag = 'todayPv', orderIndex = 1">今日访问次数</el-dropdown-item>
-                  <el-dropdown-item @click="pageParams.orderTag = 'totalPv', orderIndex = 1">累计访问次数</el-dropdown-item>
+                  <el-dropdown-item @click="setSortTag('todayPv', 1)">今日访问次数</el-dropdown-item>
+                  <el-dropdown-item @click="setSortTag('totalPv', 1)">累计访问次数</el-dropdown-item>
                 </template>
               </el-dropdown>
               <span v-else class="column-header">访问次数</span>
@@ -228,8 +230,8 @@
                   <CaretBottom class="el-icon" />
                 </span>
                 <template #dropdown>
-                  <el-dropdown-item @click="pageParams.orderTag = 'todayUv', orderIndex = 2">今日访问人数</el-dropdown-item>
-                  <el-dropdown-item @click="pageParams.orderTag = 'totalUv', orderIndex = 2">累计访问人数</el-dropdown-item>
+                  <el-dropdown-item @click="setSortTag('todayUv', 2)">今日访问人数</el-dropdown-item>
+                  <el-dropdown-item @click="setSortTag('totalUv', 2)">累计访问人数</el-dropdown-item>
                 </template>
               </el-dropdown>
               <span v-else class="column-header">访问人数</span>
@@ -255,8 +257,8 @@
                   <CaretBottom class="el-icon" />
                 </span>
                 <template #dropdown>
-                  <el-dropdown-item @click="pageParams.orderTag = 'todayUip', orderIndex = 3">今日IP数</el-dropdown-item>
-                  <el-dropdown-item @click="pageParams.orderTag = 'totalUip', orderIndex = 3">累计IP数</el-dropdown-item>
+                  <el-dropdown-item @click="setSortTag('todayUip', 3)">今日IP数</el-dropdown-item>
+                  <el-dropdown-item @click="setSortTag('totalUip', 3)">累计IP数</el-dropdown-item>
                 </template>
               </el-dropdown>
               <span v-else class="column-header">IP数</span>
@@ -949,20 +951,36 @@ onBeforeUnmount(() => {
 })
 
 const tableData = ref([])
+// 表格加载态：切换分组/翻页/排序期间覆盖旧数据，避免"左变右不变"
+const tableLoading = ref(false)
+// 请求序号：并发请求只认最后一次响应，避免旧分组的数据覆盖新分组
+let requestSeq = 0
+const DEFAULT_PAGE_SIZE = 10
+// 进入回收站前的分页条数，切回分组时还原
+let normalPageSize = DEFAULT_PAGE_SIZE
 const pageParams = reactive({
   gid: null,
   current: 1,
-  size: 10,
+  size: DEFAULT_PAGE_SIZE,
   orderTag: 'createTime',
   orderType: 'desc'
 })
+// 主动切分组时自己会发请求，这里临时屏蔽排序监听，避免重复请求
+let skipSortWatch = false
 watch(
   () => [pageParams.orderTag, pageParams.orderType],
   () => {
-    if (isRecycleBin.value) return
+    if (isRecycleBin.value || skipSortWatch) return
     queryPage()
   }
 )
+// 表头下拉切换排序字段：必须回到第一页，且固定按降序（访问多的在前）
+const setSortTag = (tag, idx) => {
+  orderIndex.value = idx
+  pageParams.current = 1
+  pageParams.orderType = 'desc'
+  pageParams.orderTag = tag
+}
 const handleSortChange = ({ prop, order }) => {
   if (isRecycleBin.value || prop !== 'createTime') return
   pageParams.current = 1
@@ -970,19 +988,55 @@ const handleSortChange = ({ prop, order }) => {
   pageParams.orderType = order === 'ascending' ? 'asc' : 'desc'
 }
 const totalNums = ref(0)
+// 列表结果缓存（stale-while-revalidate）：切回看过的分组时先用缓存秒开，再静默刷新
+const pageCache = new Map()
+const PAGE_CACHE_MAX = 30
+const currentCacheKey = () =>
+  [pageParams.gid, pageParams.current, pageParams.size, pageParams.orderTag, pageParams.orderType].join('|')
 const queryPage = async () => {
+  const seq = ++requestSeq
   pageParams.gid = editableTabs.value?.[selectedIndex.value]?.gid
   nums.value = editableTabs.value?.[selectedIndex.value]?.shortLinkCount || 0
-  const res = await API.smallLinkPage.queryPage(pageParams)
-  if (res?.data.success) {
-    tableData.value = res.data?.data?.records
-    totalNums.value = +res.data?.data?.total
-  } else {
-    ElMessage.error(res?.data.message)
+  const cacheKey = currentCacheKey()
+  const cached = pageCache.get(cacheKey)
+  // 命中缓存：先渲染旧数据（用户立刻看到内容），请求继续在后台刷新
+  if (cached) {
+    tableData.value = cached.records
+    totalNums.value = cached.total
+  }
+  tableLoading.value = true
+  try {
+    const res = await API.smallLinkPage.queryPage(pageParams)
+    // 期间又发了新请求，这份结果已经过期，直接丢弃
+    if (seq !== requestSeq) return
+    if (res?.data.success) {
+      const records = res.data?.data?.records || []
+      const total = +res.data?.data?.total || 0
+      tableData.value = records
+      totalNums.value = total
+      pageCache.set(cacheKey, { records, total })
+      if (pageCache.size > PAGE_CACHE_MAX) {
+        pageCache.delete(pageCache.keys().next().value)
+      }
+    } else if (!cached) {
+      // 没有缓存兜底时才清空，避免把已渲染的内容闪掉
+      tableData.value = []
+      totalNums.value = 0
+      ElMessage.error(res?.data?.message || '加载失败')
+    }
+  } catch (e) {
+    if (seq === requestSeq && !cached) {
+      tableData.value = []
+      totalNums.value = 0
+    }
+  } finally {
+    if (seq === requestSeq) tableLoading.value = false
   }
 }
 const handleSizeChange = (val) => {
   pageParams.size = val
+  // 改每页条数必须回到第一页，否则可能停在不存在的页码上
+  pageParams.current = 1
   !isRecycleBin.value ? queryPage() : queryRecycleBinPage()
 }
 const handleCurrentChange = (val) => {
@@ -990,6 +1044,8 @@ const handleCurrentChange = (val) => {
   !isRecycleBin.value ? queryPage() : queryRecycleBinPage()
 }
 const getGroupInfo = async (fn) => {
+  // 列表刷新前记住当前选中的 gid，刷新后按 gid 找回，避免下标漂移选到别的分组
+  const currentGid = editableTabs.value?.[selectedIndex.value]?.gid
   const res = await API.group.queryGroup()
   const groupList = res.data?.data?.reverse() || []
   editableTabs.value = groupList
@@ -1007,24 +1063,46 @@ const getGroupInfo = async (fn) => {
       }))
     }
   }
+  if (currentGid && editableTabs.value.length) {
+    const idx = editableTabs.value.findIndex(item => item.gid === currentGid)
+    selectedIndex.value = idx >= 0
+      ? idx
+      : Math.min(Math.max(selectedIndex.value, 0), editableTabs.value.length - 1)
+  }
   fn && fn()
 }
 getGroupInfo(queryPage)
 const updatePage = () => {
+  // 增删改之后缓存必然失效，清掉避免先渲染出旧列表
+  pageCache.clear()
   getGroupInfo(queryPage)
 }
 const isRecycleBin = ref(false)
 const recycleBinNums = ref(0)
-const queryRecycleBinPage = () => {
-  API.smallLinkPage
-    .queryRecycleBin({ current: pageParams.current, size: pageParams.size })
-    .then((res) => {
-      tableData.value = res.data?.data?.records
-      totalNums.value = +res.data?.data?.total
-      recycleBinNums.value = totalNums.value
+const queryRecycleBinPage = async () => {
+  const seq = ++requestSeq
+  tableLoading.value = true
+  try {
+    const res = await API.smallLinkPage.queryRecycleBin({
+      current: pageParams.current,
+      size: pageParams.size
     })
+    if (seq !== requestSeq) return
+    tableData.value = res.data?.data?.records || []
+    totalNums.value = +res.data?.data?.total || 0
+    recycleBinNums.value = totalNums.value
+  } catch (e) {
+    if (seq === requestSeq) {
+      tableData.value = []
+      totalNums.value = 0
+    }
+  } finally {
+    if (seq === requestSeq) tableLoading.value = false
+  }
 }
 const recycleBin = () => {
+  // 记住分组视图的分页条数，切回来时还原（回收站固定用 15）
+  normalPageSize = pageParams.size
   isRecycleBin.value = true
   selectedIndex.value = -1
   pageParams.current = 1
@@ -1034,11 +1112,24 @@ const recycleBin = () => {
   queryRecycleBinPage()
 }
 const changeSelectIndex = (index) => {
+  // 同一分组且请求还在路上时不重复发起，避免无效并发
+  if (index === selectedIndex.value && tableLoading.value) return
+  const fromRecycleBin = isRecycleBin.value
   selectedIndex.value = index
   isRecycleBin.value = false
+  // 切分组必须回到第一页，否则会带着上一个分组的页码去查
+  pageParams.current = 1
+  if (fromRecycleBin) {
+    pageParams.size = normalPageSize
+  }
   if (!pageParams.orderTag) {
+    // 从回收站回来需要补默认排序，这次赋值不要触发排序监听（下面已手动请求）
+    skipSortWatch = true
     pageParams.orderTag = 'createTime'
     pageParams.orderType = 'desc'
+    nextTick(() => {
+      skipSortWatch = false
+    })
   }
   queryPage()
 }
@@ -2133,9 +2224,43 @@ $shadow-hover: 0 6px 20px rgba(0, 0, 0, 0.1);
 }
 
 // 空状态
+// 切换分组时的细进度条：不遮挡内容，切换不再有"卡住"感
+.page-progress {
+  position: relative;
+  height: 2px;
+  width: 100%;
+  overflow: hidden;
+  opacity: 0;
+  transition: opacity 0.25s;
+
+  &.active {
+    opacity: 1;
+    background: #eef2ff;
+  }
+
+  &.active::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -40%;
+    width: 40%;
+    height: 100%;
+    background: linear-gradient(90deg, #3464e0, #78dffc);
+    animation: page-progress-run 1s ease-in-out infinite;
+  }
+}
+
+@keyframes page-progress-run {
+  0% {
+    left: -40%;
+  }
+  100% {
+    left: 100%;
+  }
+}
+
 .empty-state {
-  height: 40vh;
-  display: flex;
+  height: 40vh;  display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;

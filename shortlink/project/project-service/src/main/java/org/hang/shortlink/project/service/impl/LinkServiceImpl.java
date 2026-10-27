@@ -25,7 +25,6 @@ import org.hang.shortlink.project.dto.link.reseponse.LinkBatchCreateResponseDto;
 import org.hang.shortlink.project.dto.link.reseponse.LinkGroupCountResponseDto;
 import org.hang.shortlink.project.dto.link.reseponse.LinkPageResponseDto;
 import org.hang.shortlink.project.pojo.po.Link;
-import org.hang.shortlink.project.mapper.LinkAccessLogStatsMapper;
 import org.hang.shortlink.project.mapper.LinkAccessStatsMapper;
 import org.hang.shortlink.project.mapper.LinkMapper;
 import org.hang.shortlink.project.pojo.po.LinkGoto;
@@ -111,7 +110,7 @@ public class LinkServiceImpl extends ServiceImpl<LinkMapper, Link> implements IL
 
     private final LinkAccessStatsMapper linkAccessStatsMapper;
 
-    private final LinkAccessLogStatsMapper linkAccessLogStatsMapper;
+    private final ILinkAccessLogStatsService linkAccessLogStatsService;
 
     private final IpUtils ipUtils; // IP工具类
 
@@ -424,6 +423,12 @@ public class LinkServiceImpl extends ServiceImpl<LinkMapper, Link> implements IL
         Page<Link> page = new Page<>(current, size);
         boolean asc = isAscOrder(pageQuery.getOrderType());
 
+        // 按统计字段排序时走单独分支：统计值不在主表，库里排不了，
+        // 必须先取本分组全量再排序分页，否则只会排当前页（跨页顺序错乱）
+        if (isStatsOrderTag(pageQuery.getOrderTag())) {
+            return pageLinkOrderByStats(pageQuery.getGid(), current, size, asc, pageQuery.getOrderTag());
+        }
+
         // 1. 构建基础查询条件
         var queryWrapper = Wrappers.lambdaQuery(Link.class)
                 .eq(Link::getGid, pageQuery.getGid())
@@ -450,70 +455,10 @@ public class LinkServiceImpl extends ServiceImpl<LinkMapper, Link> implements IL
         Page<Link> linkPage = baseMapper.selectPage(page, queryWrapper);
         List<LinkPageResponseDto> records = BeanUtil.copyToList(linkPage.getRecords(), LinkPageResponseDto.class);
 
-        // 4. 批量填充 PV/UV/UIP 统计数据
-        if (!records.isEmpty()) {
-            List<String> fullShortUrls = records.stream()
-                    .map(LinkPageResponseDto::getFullShortUrl)
-                    .filter(Objects::nonNull)
-                    .toList();
-            if (!fullShortUrls.isEmpty()) {
-                List<Map<String, Object>> statsList = linkAccessStatsMapper.selectPagePvUvUipStats(fullShortUrls, pageQuery.getGid());
-                Map<String, Map<String, Object>> statsMap = statsList.stream()
-                        .collect(Collectors.toMap(
-                                s -> (String) s.get("full_short_url"),
-                                s -> s
-                        ));
-                // 访客数按去重口径另查一次：小时表的 uv/uip 是增量值，跨天累加会重复计入同一访客。
-                // 分片表跨库 COUNT(DISTINCT) 合并结果不可靠，这里取明细行在内存里用 Set 去重
-                Map<String, Set<String>> uvSets = new HashMap<>();
-                Map<String, Set<String>> uipSets = new HashMap<>();
-                for (Map<String, Object> row : linkAccessLogStatsMapper.selectPageDistinctVisitor(fullShortUrls)) {
-                    String url = (String) row.get("full_short_url");
-                    Object user = row.get("user");
-                    Object ip = row.get("ip");
-                    uvSets.computeIfAbsent(url, k -> new HashSet<>()).add(user == null ? "" : user.toString());
-                    uipSets.computeIfAbsent(url, k -> new HashSet<>()).add(ip == null ? "" : ip.toString());
-                }
-                for (LinkPageResponseDto record : records) {
-                    Map<String, Object> stat = statsMap.get(record.getFullShortUrl());
-                    record.setTotalPv(toInt(stat, "total_pv"));
-                    record.setTodayPv(toInt(stat, "today_pv"));
-                    // 今日 UV/UIP 取小时表即可（一天内按天去重，口径正确）；累计值用去重集合大小
-                    record.setTodayUv(toInt(stat, "today_uv"));
-                    record.setTodayUip(toInt(stat, "today_uip"));
-                    Set<String> uvSet = uvSets.get(record.getFullShortUrl());
-                    Set<String> uipSet = uipSets.get(record.getFullShortUrl());
-                    record.setTotalUv(uvSet == null ? toInt(stat, "total_uv") : uvSet.size());
-                    record.setTotalUip(uipSet == null ? toInt(stat, "total_uip") : uipSet.size());
-                }
-            }
-        }
+        // 4. 批量填充 PV/UV/UIP 统计数据（两条统计查询并行执行）
+        fillStats(records, pageQuery.getGid());
 
-        // 5. 统计字段内存排序（todayPv / totalPv 等）
-        if (StrUtil.isNotEmpty(orderTag)) {
-            switch (orderTag) {
-                case "todayPv":
-                    records.sort(buildIntComparator(LinkPageResponseDto::getTodayPv, asc));
-                    break;
-                case "totalPv":
-                    records.sort(buildIntComparator(LinkPageResponseDto::getTotalPv, asc));
-                    break;
-                case "todayUv":
-                    records.sort(buildIntComparator(LinkPageResponseDto::getTodayUv, asc));
-                    break;
-                case "totalUv":
-                    records.sort(buildIntComparator(LinkPageResponseDto::getTotalUv, asc));
-                    break;
-                case "todayUip":
-                    records.sort(buildIntComparator(LinkPageResponseDto::getTodayUip, asc));
-                    break;
-                case "totalUip":
-                    records.sort(buildIntComparator(LinkPageResponseDto::getTotalUip, asc));
-                    break;
-            }
-        }
-
-        // 6. 封装分页结果
+        // 5. 封装分页结果
         return PageResult.<LinkPageResponseDto>builder()
                 .size(linkPage.getSize())
                 .current(linkPage.getCurrent())
@@ -522,6 +467,153 @@ public class LinkServiceImpl extends ServiceImpl<LinkMapper, Link> implements IL
                 .records(records)
                 .build();
     }
+
+    /**
+     * 是否是按统计字段排序
+     */
+    private boolean isStatsOrderTag(String orderTag) {
+        if (StrUtil.isEmpty(orderTag)) {
+            return false;
+        }
+        return switch (orderTag) {
+            case "todayPv", "totalPv", "todayUv", "totalUv", "todayUip", "totalUip" -> true;
+            default -> false;
+        };
+    }
+
+    /**
+     * 按统计字段排序分页。
+     * 统计值在 t_link_access_stats，无法和主表在库里一起排序，因此取本分组全量后内存排序再切片；
+     * 这样跨页顺序才是全局正确的（原实现只对当前页排序）。分组链接数很大时是一次全量查询，属该排序方式固有代价。
+     */
+    private PageResult<LinkPageResponseDto> pageLinkOrderByStats(String gid, long current, long size,
+                                                                boolean asc, String orderTag) {
+        List<Link> allLinks = this.list(Wrappers.lambdaQuery(Link.class)
+                .eq(Link::getGid, gid)
+                .eq(Link::getEnableStatus, 0));
+        long total = allLinks.size();
+        if (total == 0) {
+            return PageResult.<LinkPageResponseDto>builder()
+                    .size(size)
+                    .current(current)
+                    .pages(0L)
+                    .total(0L)
+                    .records(Collections.emptyList())
+                    .build();
+        }
+
+        List<LinkPageResponseDto> allRecords = BeanUtil.copyToList(allLinks, LinkPageResponseDto.class);
+        fillStats(allRecords, gid);
+
+        Comparator<LinkPageResponseDto> comparator = buildStatsComparator(orderTag);
+        if (comparator == null) {
+            comparator = Comparator.comparing(LinkPageResponseDto::getUpdateTime,
+                    Comparator.nullsLast(Comparator.naturalOrder()));
+        }
+        // 统计值相同的记录按创建时间排序，保证分页顺序稳定（否则同一条件下多次查询顺序可能不同）
+        Comparator<LinkPageResponseDto> tieBreaker = Comparator.comparing(
+                LinkPageResponseDto::getCreateTime, Comparator.nullsLast(Comparator.naturalOrder()));
+        allRecords.sort(asc
+                ? comparator.thenComparing(tieBreaker)
+                : comparator.reversed().thenComparing(tieBreaker.reversed()));
+
+        // 用 long 计算偏移，避免 current 很大时整型溢出导致 subList 下标为负
+        long fromL = Math.max(0L, Math.min((current - 1) * size, total));
+        int from = (int) fromL;
+        int to = (int) Math.min(fromL + size, total);
+        List<LinkPageResponseDto> pageRecords = new ArrayList<>(allRecords.subList(from, to));
+
+        long pages = (total + size - 1) / size;
+        return PageResult.<LinkPageResponseDto>builder()
+                .size(size)
+                .current(current)
+                .pages(pages)
+                .total(total)
+                .records(pageRecords)
+                .build();
+    }
+
+    private Comparator<LinkPageResponseDto> buildStatsComparator(String orderTag) {
+        if (orderTag == null) {
+            return null;
+        }
+        return switch (orderTag) {
+            case "todayPv" -> Comparator.comparingInt(r -> safeInt(r.getTodayPv()));
+            case "totalPv" -> Comparator.comparingInt(r -> safeInt(r.getTotalPv()));
+            case "todayUv" -> Comparator.comparingInt(r -> safeInt(r.getTodayUv()));
+            case "totalUv" -> Comparator.comparingInt(r -> safeInt(r.getTotalUv()));
+            case "todayUip" -> Comparator.comparingInt(r -> safeInt(r.getTodayUip()));
+            case "totalUip" -> Comparator.comparingInt(r -> safeInt(r.getTotalUip()));
+            default -> null;
+        };
+    }
+
+    private static int safeInt(Integer value) {
+        return value == null ? 0 : value;
+    }
+
+    /**
+     * 批量填充 PV/UV/UIP。
+     * 两条统计查询互不依赖，并行执行以省掉一次数据库往返；
+     * 任一失败只降级为 0，不影响列表本身返回。
+     */
+    private void fillStats(List<LinkPageResponseDto> records, String gid) {
+        if (CollUtil.isEmpty(records)) {
+            return;
+        }
+        List<String> fullShortUrls = records.stream()
+                .map(LinkPageResponseDto::getFullShortUrl)
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+        if (fullShortUrls.isEmpty()) {
+            return;
+        }
+
+        // 数据库已迁到本地，单次查询 1ms 量级，串行执行即可，不需要线程池
+        List<Map<String, Object>> statsList;
+        try {
+            statsList = linkAccessStatsMapper.selectPagePvUvUipStats(fullShortUrls, gid);
+        } catch (Exception e) {
+            log.warn("[列表统计] PV/UV/UIP 查询失败，降级为 0", e);
+            statsList = Collections.emptyList();
+        }
+
+        Map<String, Map<String, Integer>> visitorMap;
+        try {
+            visitorMap = linkAccessLogStatsService.getPageDistinctVisitor(fullShortUrls);
+        } catch (Exception e) {
+            log.warn("[列表统计] 去重访客查询失败，降级为 0", e);
+            visitorMap = Collections.emptyMap();
+        }
+
+        Map<String, Map<String, Object>> statsMap = statsList.stream()
+                .filter(item -> item.get("full_short_url") != null)
+                .collect(Collectors.toMap(
+                        item -> (String) item.get("full_short_url"),
+                        item -> item,
+                        (a, b) -> a
+                ));
+
+        for (LinkPageResponseDto record : records) {
+            Map<String, Object> stat = statsMap.get(record.getFullShortUrl());
+            record.setTotalPv(toInt(stat, "total_pv"));
+            record.setTodayPv(toInt(stat, "today_pv"));
+            // 今日 UV/UIP 取小时表即可（一天内按天去重，口径正确）
+            record.setTodayUv(toInt(stat, "today_uv"));
+            record.setTodayUip(toInt(stat, "today_uip"));
+            // 累计 UV/UIP 用整个区间的去重结果
+            Map<String, Integer> visitor = visitorMap.get(record.getFullShortUrl());
+            if (visitor != null) {
+                record.setTotalUv(safeInt(visitor.get("uv")));
+                record.setTotalUip(safeInt(visitor.get("uip")));
+            } else {
+                record.setTotalUv(toInt(stat, "total_uv"));
+                record.setTotalUip(toInt(stat, "total_uip"));
+            }
+        }
+    }
+
 
     /**
      * 安全获取统计数字
@@ -535,11 +627,6 @@ public class LinkServiceImpl extends ServiceImpl<LinkMapper, Link> implements IL
 
     private boolean isAscOrder(String orderType) {
         return StrUtil.equalsIgnoreCase(orderType, "asc");
-    }
-
-    private Comparator<LinkPageResponseDto> buildIntComparator(java.util.function.ToIntFunction<LinkPageResponseDto> extractor, boolean asc) {
-        Comparator<LinkPageResponseDto> comparator = Comparator.comparingInt(extractor);
-        return asc ? comparator : comparator.reversed();
     }
 
 

@@ -73,6 +73,11 @@ public interface LinkAccessLogStatsMapper extends BaseMapper<LinkAccessLogStats>
      */
     List<Map<String, Object>> selectPageDistinctVisitor(@Param("fullShortUrls") List<String> fullShortUrls);
 
+    /**
+     * 单个短链接的累计去重访客数（单分片，库内聚合，不传输明细行）
+     */
+    Map<String, Object> selectVisitorCount(@Param("fullShortUrl") String fullShortUrl);
+
 
     /**
      * 分页查询访问记录（支持单个/批量短链接）

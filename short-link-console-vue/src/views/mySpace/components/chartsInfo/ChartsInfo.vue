@@ -966,7 +966,8 @@ const initLineChart = () => {
       }
     ]
   }
-  lineChart.setOption(option)
+  // 必须用 notMerge：setOption 默认是合并，上一次画上去的"无数据"文案不会被清掉
+  lineChart.setOption(option, true)
 }
 // 总访问次数
 const totalPv = ref(0)
