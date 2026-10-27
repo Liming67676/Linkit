@@ -52,6 +52,27 @@ public interface LinkAccessLogStatsMapper extends BaseMapper<LinkAccessLogStats>
             @Param("start") LocalDateTime start,
             @Param("end") LocalDateTime end);
 
+    /**
+     * 区间内去重访客数（跨天去重，uv/uip）
+     */
+    Map<String, Object> countDistinctVisitor(
+            @Param("fullShortUrl") String fullShortUrl,
+            @Param("start") LocalDateTime start,
+            @Param("end") LocalDateTime end);
+
+    /**
+     * 批量：区间内访客明细（按 短链接+访客+IP 去重后的行），由上层做去重计数
+     */
+    List<Map<String, Object>> countDistinctVisitorBatch(
+            @Param("fullShortUrls") List<String> fullShortUrls,
+            @Param("start") LocalDateTime start,
+            @Param("end") LocalDateTime end);
+
+    /**
+     * 列表页：一页链接的访客明细（全量口径，按 短链接+访客+IP 去重后的行）
+     */
+    List<Map<String, Object>> selectPageDistinctVisitor(@Param("fullShortUrls") List<String> fullShortUrls);
+
 
     /**
      * 分页查询访问记录（支持单个/批量短链接）

@@ -172,7 +172,10 @@ public class LinkAccessStatsServiceImpl extends ServiceImpl<LinkAccessStatsMappe
         list.forEach(map -> {
             int weekday = (Integer) map.get("weekday");
             int count = ((Number) map.get("pv")).intValue();
-            weekdayStats.set(weekday, count);
+            // weekday 落库存的是 1-7（周一至周日），列表下标 0-6 对应周一至周日
+            if (weekday >= 1 && weekday <= 7) {
+                weekdayStats.set(weekday - 1, count);
+            }
         });
         return weekdayStats;
     }
@@ -233,7 +236,10 @@ public class LinkAccessStatsServiceImpl extends ServiceImpl<LinkAccessStatsMappe
         list.forEach(map -> {
             int weekday = (Integer) map.get("weekday");
             int count = ((Number) map.get("pv")).intValue();
-            weekdayStats.set(weekday, count);
+            // weekday 落库存的是 1-7（周一至周日），列表下标 0-6 对应周一至周日
+            if (weekday >= 1 && weekday <= 7) {
+                weekdayStats.set(weekday - 1, count);
+            }
         });
         return weekdayStats;
     }

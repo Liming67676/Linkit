@@ -6,8 +6,6 @@ import cn.hutool.core.util.StrUtil;
 import cn.hutool.crypto.SecureUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
-import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
-import com.baomidou.mybatisplus.core.metadata.OrderItem;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import jakarta.servlet.http.HttpServletRequest;
@@ -27,6 +25,7 @@ import org.hang.shortlink.project.dto.link.reseponse.LinkBatchCreateResponseDto;
 import org.hang.shortlink.project.dto.link.reseponse.LinkGroupCountResponseDto;
 import org.hang.shortlink.project.dto.link.reseponse.LinkPageResponseDto;
 import org.hang.shortlink.project.pojo.po.Link;
+import org.hang.shortlink.project.mapper.LinkAccessLogStatsMapper;
 import org.hang.shortlink.project.mapper.LinkAccessStatsMapper;
 import org.hang.shortlink.project.mapper.LinkMapper;
 import org.hang.shortlink.project.pojo.po.LinkGoto;
@@ -111,6 +110,8 @@ public class LinkServiceImpl extends ServiceImpl<LinkMapper, Link> implements IL
     private final ILinkAccessStatsService linkAccessStatsService;
 
     private final LinkAccessStatsMapper linkAccessStatsMapper;
+
+    private final LinkAccessLogStatsMapper linkAccessLogStatsMapper;
 
     private final IpUtils ipUtils; // IP工具类
 
@@ -462,14 +463,28 @@ public class LinkServiceImpl extends ServiceImpl<LinkMapper, Link> implements IL
                                 s -> (String) s.get("full_short_url"),
                                 s -> s
                         ));
+                // 访客数按去重口径另查一次：小时表的 uv/uip 是增量值，跨天累加会重复计入同一访客。
+                // 分片表跨库 COUNT(DISTINCT) 合并结果不可靠，这里取明细行在内存里用 Set 去重
+                Map<String, Set<String>> uvSets = new HashMap<>();
+                Map<String, Set<String>> uipSets = new HashMap<>();
+                for (Map<String, Object> row : linkAccessLogStatsMapper.selectPageDistinctVisitor(fullShortUrls)) {
+                    String url = (String) row.get("full_short_url");
+                    Object user = row.get("user");
+                    Object ip = row.get("ip");
+                    uvSets.computeIfAbsent(url, k -> new HashSet<>()).add(user == null ? "" : user.toString());
+                    uipSets.computeIfAbsent(url, k -> new HashSet<>()).add(ip == null ? "" : ip.toString());
+                }
                 for (LinkPageResponseDto record : records) {
                     Map<String, Object> stat = statsMap.get(record.getFullShortUrl());
                     record.setTotalPv(toInt(stat, "total_pv"));
-                    record.setTotalUv(toInt(stat, "total_uv"));
-                    record.setTotalUip(toInt(stat, "total_uip"));
                     record.setTodayPv(toInt(stat, "today_pv"));
+                    // 今日 UV/UIP 取小时表即可（一天内按天去重，口径正确）；累计值用去重集合大小
                     record.setTodayUv(toInt(stat, "today_uv"));
                     record.setTodayUip(toInt(stat, "today_uip"));
+                    Set<String> uvSet = uvSets.get(record.getFullShortUrl());
+                    Set<String> uipSet = uipSets.get(record.getFullShortUrl());
+                    record.setTotalUv(uvSet == null ? toInt(stat, "total_uv") : uvSet.size());
+                    record.setTotalUip(uipSet == null ? toInt(stat, "total_uip") : uipSet.size());
                 }
             }
         }

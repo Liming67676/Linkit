@@ -6,7 +6,7 @@
 
 <script setup>
 import * as echarts from 'echarts'
-import { onMounted, nextTick, ref, watch } from 'vue'
+import { onMounted, onBeforeUnmount, nextTick, ref, watch } from 'vue'
 const props = defineProps({
   chartData: {
     type: Object,
@@ -26,19 +26,47 @@ watch(
 const barChartRef = ref()
 const initChart = () => {
   const barDom = barChartRef.value
-  const barChart = echarts.init(barDom)
+  // 切换日期区间会反复触发重绘，复用已有实例避免重复 init 造成实例泄漏
+  const barChart = echarts.getInstanceByDom(barDom) || echarts.init(barDom)
+  const values = props.chartData?.value || []
+  // 全为 0 也视为无数据，避免出现只有坐标轴的空图
+  const isEmpty = !values.length || values.every((item) => !Number(item))
   const option = {
+    graphic: isEmpty
+      ? [
+          {
+            type: 'text',
+            left: 'center',
+            top: '50%',
+            silent: true,
+            style: { text: '所选日期内没有访问数据', fill: '#ababab', fontSize: 13 }
+          }
+        ]
+      : [],
     tooltip: {
       trigger: 'axis',
       axisPointer: {
         type: 'shadow'
       }
     },
+    legend: {
+      show: true,
+      top: 0,
+      right: 8,
+      itemWidth: 10,
+      itemHeight: 10,
+      icon: 'roundRect',
+      textStyle: {
+        color: '#ababab',
+        fontSize: 12
+      },
+      data: ['访问次数']
+    },
     grid: {
       left: '5%',
       right: '5%',
       bottom: '5%',
-      top: '13%',
+      top: '20%',
       containLabel: true
     },
     xAxis: {
@@ -68,6 +96,7 @@ const initChart = () => {
     },
     series: [
       {
+        name: '访问次数',
         data: props.chartData.value,
         type: 'bar',
         barWidth: '10px',
@@ -78,6 +107,7 @@ const initChart = () => {
             { offset: 1, color: '#188df0' }
           ])
         },
+        // 浅灰色是柱子的底槽（背景轨道），只做视觉参考，不是数据系列，所以不进图例
         showBackground: true,
         backgroundStyle: {
           color: 'rgba(180, 180, 180, 0.2)'
@@ -85,12 +115,26 @@ const initChart = () => {
       }
     ]
   };
-  barChart.setOption(option)
+  barChart.setOption(option, true)
 }
+// 抽屉打开前容器宽度接近 0，图表按 0 尺寸 init 后会一直空白，
+// 用 ResizeObserver 在容器真正有尺寸时补一次 resize
+let resizeObserver = null
 onMounted(() => {
   nextTick(() => {
     initChart()
+    if (typeof ResizeObserver !== 'undefined' && barChartRef.value) {
+      resizeObserver = new ResizeObserver(() => {
+        const chart = echarts.getInstanceByDom(barChartRef.value)
+        if (chart && !chart.isDisposed()) chart.resize()
+      })
+      resizeObserver.observe(barChartRef.value)
+    }
   })
+})
+onBeforeUnmount(() => {
+  resizeObserver?.disconnect()
+  resizeObserver = null
 })
 </script>
 

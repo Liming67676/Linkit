@@ -2,6 +2,7 @@ package org.hang.shortlink.project.service.impl;
 
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import cn.hutool.core.collection.CollUtil;
 import lombok.RequiredArgsConstructor;
 import org.hang.shortlink.common.exception.ServiceException;
 import org.hang.shortlink.common.pojo.PageResult;
@@ -111,11 +112,9 @@ public class LinkAccessLogStatsServiceImpl extends ServiceImpl<LinkAccessLogStat
     public List<ShortLinkStatsUvResponseDto> getUvTypeStats(String fullShortUrl, LocalDateTime start, LocalDateTime end) {
         // 强制校验热数据（根据你的业务需求保留）
         checkHotData(start);
-        log.info("[getUvTypeStats] 查询参数 - fullShortUrl={}, start={}, end={}", fullShortUrl, start, end);
         List<ShortLinkStatsUvResponseDto> uvTypeStats = new ArrayList<>();
         // 查询新老访客
         Map<String, Object> findUvTypeByShortLink = baseMapper.findUvTypeCntByShortLink(fullShortUrl, start, end);
-        log.info("[getUvTypeStats] 查询结果 - {}", findUvTypeByShortLink);
 
         int oldUserCnt = Integer.parseInt(
                 Optional.ofNullable(findUvTypeByShortLink)
@@ -174,7 +173,6 @@ public class LinkAccessLogStatsServiceImpl extends ServiceImpl<LinkAccessLogStat
         List<ShortLinkStatsUvResponseDto> uvTypeStats = new ArrayList<>();
         // 查询新老访客
         Map<String, Object> findUvTypeByShortLinks = baseMapper.findUvTypeCntByShortLinks(fullShortUrls, start, end);
-        log.info("[getUvTypeStatsBatch] 查询结果 - {}", findUvTypeByShortLinks);
 
         int oldUserCnt = Integer.parseInt(
                 Optional.ofNullable(findUvTypeByShortLinks)
@@ -203,6 +201,62 @@ public class LinkAccessLogStatsServiceImpl extends ServiceImpl<LinkAccessLogStat
         uvTypeStats.add(ShortLinkStatsUvResponseDto.builder().uvType("oldUser").cnt(oldUserCnt).ratio(actualOldRatio).build());
 
         return uvTypeStats;
+    }
+
+    @Override
+    public Map<String, Integer> countDistinctVisitor(String fullShortUrl, LocalDateTime start, LocalDateTime end) {
+        checkHotData(start);
+        return toVisitorCount(baseMapper.countDistinctVisitor(fullShortUrl, start, end));
+    }
+
+    @Override
+    public Map<String, Integer> countDistinctVisitorBatch(List<String> fullShortUrls, LocalDateTime start, LocalDateTime end) {
+        checkHotData(start);
+        if (CollUtil.isEmpty(fullShortUrls)) {
+            return Map.of("uv", 0, "uip", 0);
+        }
+        // 跨分片 COUNT(DISTINCT) 的合并结果不可靠，改为取明细行在内存里用 Set 去重
+        List<Map<String, Object>> rows = baseMapper.countDistinctVisitorBatch(fullShortUrls, start, end);
+        return countVisitorFromRows(rows);
+    }
+
+    private Map<String, Integer> countVisitorFromRows(List<Map<String, Object>> rows) {
+        if (CollUtil.isEmpty(rows)) {
+            return Map.of("uv", 0, "uip", 0);
+        }
+        Set<String> users = new HashSet<>();
+        Set<String> ips = new HashSet<>();
+        for (Map<String, Object> row : rows) {
+            Object user = row.get("user");
+            Object ip = row.get("ip");
+            users.add(user == null ? "" : user.toString());
+            ips.add(ip == null ? "" : ip.toString());
+        }
+        return Map.of("uv", users.size(), "uip", ips.size());
+    }
+
+    /**
+     * 统一把聚合结果转成 uv/uip：分片合并后返回值可能是字符串，统一按字符串解析
+     */
+    private Map<String, Integer> toVisitorCount(Map<String, Object> row) {
+        if (row == null || row.isEmpty()) {
+            return Map.of("uv", 0, "uip", 0);
+        }
+        return Map.of("uv", toInt(row.get("uv")), "uip", toInt(row.get("uip")));
+    }
+
+    private int toInt(Object value) {
+        if (value == null) {
+            return 0;
+        }
+        if (value instanceof Number number) {
+            return number.intValue();
+        }
+        try {
+            return Integer.parseInt(value.toString().trim());
+        } catch (NumberFormatException e) {
+            return 0;
+        }
     }
 
     @Override

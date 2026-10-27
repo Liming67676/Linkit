@@ -1,8 +1,8 @@
 <template>
   <div class="main-box">
-    <span v-if="!dataLists"> 所选日期内没有访问数据 </span>
+    <div v-if="!dataLists || dataLists.length === 0" class="empty-hint">所选日期内没有访问数据</div>
     <div v-else>
-      <div class="flex-box" v-for="(item, index) in dataLists" :key="index">
+      <div class="flex-box" v-for="item in dataLists" :key="item?.browser || item?.os">
         <div class="flex-item">
           <div>
             <img :src="getUrl(item?.browser, item?.os)" width="25" alt="" />
@@ -108,6 +108,15 @@ const getUrl = (img1, img2) => {
 <style lang="scss" scoped>
 .main-box {
   padding: 20px;
+
+  .empty-hint {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 160px;
+    color: #ababab;
+    font-size: 13px;
+  }
 
   .flex-box {
     height: 50px;

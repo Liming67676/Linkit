@@ -73,6 +73,16 @@ public interface ILinkAccessLogStatsService extends IService<LinkAccessLogStats>
      */
     List<ShortLinkStatsUvResponseDto> getUvTypeStatsBatch(List<String> fullShortUrls, LocalDateTime start, LocalDateTime end);
 
+    /**
+     * 区间内去重访客数（跨天去重，返回 uv / uip）
+     */
+    java.util.Map<String, Integer> countDistinctVisitor(String fullShortUrl, LocalDateTime start, LocalDateTime end);
+
+    /**
+     * 批量：区间内去重访客数（跨天去重，返回 uv / uip）
+     */
+    java.util.Map<String, Integer> countDistinctVisitorBatch(List<String> fullShortUrls, LocalDateTime start, LocalDateTime end);
+
 
     /**
      * 分页查询访问记录（支持 单个短链接 / 分组GID 查询）

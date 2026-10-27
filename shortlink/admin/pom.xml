@@ -23,7 +23,7 @@
             <artifactId>shortlink-common</artifactId>
             <version>1.0-SNAPSHOT</version>
         </dependency>
-<!--        短链接api-->
+        <!--        短链接api-->
         <dependency>
             <groupId>org.hang.shortlink</groupId>
             <artifactId>project-api</artifactId>

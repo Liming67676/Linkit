@@ -25,7 +25,7 @@
               <span class="over-text">{{ item.name }}</span>
             </div>
             <div class="item-right">
-              <el-tooltip show-after="500" content="查看图表" placement="left">
+              <el-tooltip :show-after="500" content="查看图表" placement="left">
                 <span>
                   <Histogram v-if="item.shortLinkCount !== 0 && item.shortLinkCount !== null"
                     class="el-icon action-icon"
@@ -125,14 +125,15 @@
           >
             <template #default="scope">
               <div class="link-info-cell" :class="{ expired: scope?.row?.validDateType === 1 && !isExpire(scope?.row?.validDate) }">
-                <img :src="getImgUrl(scope.row.favicon)" :key="scope?.row?.id" width="20" height="20" class="favicon" alt="" />
+                <img :src="getImgUrl(scope.row.favicon)" :key="scope?.row?.id" width="20" height="20" class="favicon" alt=""
+                  referrerpolicy="no-referrer" loading="lazy" @error="onFaviconError" />
                 <div class="link-meta">
-                  <el-tooltip show-after="500" :content="scope.row.describe">
+                  <el-tooltip :show-after="500" :content="scope.row.describe">
                     <span class="link-title">{{ scope.row.describe }}</span>
                   </el-tooltip>
                   <div class="link-time">
                     <span>{{ scope.row.createTime }}</span>
-                    <el-tooltip show-after="500" v-if="scope?.row?.validDate" :content="'到期时间：' + scope?.row?.validDate">
+                    <el-tooltip :show-after="500" v-if="scope?.row?.validDate" :content="'到期时间：' + scope?.row?.validDate">
                       <img v-if="isExpire(scope?.row?.validDate)" width="16" src="@/assets/png/沙漏倒计时.png" class="expire-icon" alt="" />
                       <span v-else class="expired-tag">已失效</span>
                     </el-tooltip>
@@ -156,7 +157,7 @@
                     {{ scope.row.domain + '/' + scope.row.shortUri }}
                   </el-link>
                 </div>
-                <el-tooltip show-after="500" :content="scope.row.originUrl">
+                <el-tooltip :show-after="500" :content="scope.row.originUrl">
                   <span class="origin-url">{{ scope.row.originUrl }}</span>
                 </el-tooltip>
               </div>
@@ -290,10 +291,10 @@
       </div>
     </div>
     <!-- 弹窗 -->
-    <ChartsInfo ref="chartsInfoRef" :title="chartsInfoTitle" :info="chartsInfo"
+    <component :is="chartsComp" v-if="chartsMounted" ref="chartsInfoRef" :title="chartsInfoTitle" :info="chartsInfo"
       :tableInfo="tableInfo" :isGroup="isGroup" :nums="nums" :favicon="favicon1" :originUrl="originUrl1"
       :fullShortUrl="tableFullShortUrl"
-      @changeTime="changeTime" @changePage="changePage" @loadAccessRecords="loadAccessRecords"></ChartsInfo>
+      @changeTime="changeTime" @changePage="changePage" @loadAccessRecords="loadAccessRecords"></component>
     <!-- 右侧新建分组抽屉 -->
     <el-drawer
       v-model="isAddGroup"
@@ -628,12 +629,21 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted, onBeforeUnmount, getCurrentInstance, watch, nextTick } from 'vue'
+import { ref, reactive, computed, onMounted, onBeforeUnmount, getCurrentInstance, watch, nextTick, shallowRef } from 'vue'
 import { useRouter } from 'vue-router'
 import Sortable from 'sortablejs'
 import { cloneDeep } from 'lodash'
 import { removeKey, removeUsername, getToken, getUsername } from '@/core/auth.js'
-import ChartsInfo from './components/chartsInfo/ChartsInfo.vue'
+// 统计抽屉里带着 echarts、中国/世界地图、html2canvas（约 1.2MB），改成按需加载：
+// 先把模块取回来，再同步挂载组件，保证挂载后能立刻拿到 ref 调用 isVisible()
+let chartsInfoModule = null
+const loadChartsInfo = async () => {
+  if (!chartsInfoModule) {
+    const mod = await import('./components/chartsInfo/ChartsInfo.vue')
+    chartsInfoModule = mod.default
+  }
+  return chartsInfoModule
+}
 import CreateLink from './components/createLink/CreateLink.vue'
 import CreateLinks from './components/createLink/CreateLinks.vue'
 import { getTodayFormatDate, getLastWeekFormatDate } from '@/utils/plugins.js'
@@ -649,6 +659,9 @@ const orderIndex = ref(0)
 const { proxy } = getCurrentInstance()
 const API = proxy.$API
 const passwordPattern = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z\d]).{8,}$/
+// 统计抽屉：chartsComp 存已加载的组件，chartsMounted 控制是否挂载
+const chartsComp = shallowRef(null)
+const chartsMounted = ref(false)
 const chartsInfoRef = ref()
 const chartsInfoTitle = ref()
 const chartsInfo = ref()
@@ -810,7 +823,14 @@ const chartsVisible = async (rowInfo, dateList) => {
   visitLink.fullShortUrl = fullShortUrl
   visitLink.gid = gid
   visitLink.enableStatus = enableStatus
-  chartsInfoRef?.value.isVisible()
+  // 先把组件模块取回来（首次会下载 chunk），再同步挂载 + 打开，避免异步挂载导致 ref 取不到
+  const comp = await loadChartsInfo()
+  if (!chartsComp.value) {
+    chartsComp.value = comp
+  }
+  chartsMounted.value = true
+  await nextTick()
+  chartsInfoRef.value?.isVisible()
   if (!dateList) {
     initStatsFormData()
   } else {
@@ -919,6 +939,10 @@ onMounted(async () => {
   nextTick(() => {
     initSortable('sortOptions')
   })
+  // 首屏渲染完成后预取统计抽屉的 chunk，首次点击“查看统计”不用干等下载
+  setTimeout(() => {
+    loadChartsInfo().catch(() => {})
+  }, 2000)
 })
 onBeforeUnmount(() => {
   releaseQrCodeObjectUrl()
@@ -1200,6 +1224,14 @@ const onBatchLinkCancel = () => {
 }
 const getImgUrl = (url) => {
   return url ?? defaultImg
+}
+// 站点 favicon 多来自第三方 CDN，常因防盗链返回 403（如腾讯 gtimg），
+// 加载失败时回落到本地默认图标，避免列表里出现破图
+const onFaviconError = (e) => {
+  const img = e.target
+  if (!img || img.dataset.fallback) return
+  img.dataset.fallback = '1'
+  img.src = defaultImg
 }
 const isExpire = (time) => {
   return new Date().getTime() < new Date(time).getTime()

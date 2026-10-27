@@ -70,6 +70,16 @@ public class ShortLinkStatsServiceImpl implements IShortLinkStatsService {
             log.error("[统计接口] 获取PV/UV/UIP失败，fullShortUrl：{}", fullShortUrl, e);
         }
 
+        // UV/UIP 按整个区间去重：小时表存的是增量值，跨小时/跨天累加会把同一访客重复计入
+        try {
+            Map<String, Integer> visitor = linkAccessLogStatsService.countDistinctVisitor(fullShortUrl, start, end);
+            totalMap = new HashMap<>(totalMap);
+            totalMap.put("uv", visitor.getOrDefault("uv", 0));
+            totalMap.put("uip", visitor.getOrDefault("uip", 0));
+        } catch (Exception e) {
+            log.error("[统计接口] 获取去重访客数失败，fullShortUrl：{}", fullShortUrl, e);
+        }
+
         try {
             daily = linkAccessStatsService.getDailyStats(fullShortUrl, start, end);
         } catch (Exception e) {
@@ -218,6 +228,16 @@ public class ShortLinkStatsServiceImpl implements IShortLinkStatsService {
             totalMap = linkAccessStatsService.getPvUvUipTotalBatch(fullShortUrls, start, end);
         } catch (Exception e) {
             log.error("[分组统计] 获取PV/UV/UIP失败，gid：{}", gid, e);
+        }
+
+        // UV/UIP 按整个区间去重：小时表存的是增量值，跨小时/跨天累加会把同一访客重复计入
+        try {
+            Map<String, Integer> visitor = linkAccessLogStatsService.countDistinctVisitorBatch(fullShortUrls, start, end);
+            totalMap = new HashMap<>(totalMap);
+            totalMap.put("uv", visitor.getOrDefault("uv", 0));
+            totalMap.put("uip", visitor.getOrDefault("uip", 0));
+        } catch (Exception e) {
+            log.error("[分组统计] 获取去重访客数失败，gid：{}", gid, e);
         }
 
         try {

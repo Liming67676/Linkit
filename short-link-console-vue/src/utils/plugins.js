@@ -49,12 +49,8 @@ function randomString(length) {
   return result
 }
 function isString(text) {
-  try {
-    // eslint-disable-next-line no-eval
-    return typeof eval(text) === 'string'
-  } catch (err) {
-    return false
-  }
+  // 原来用 eval(text) 判断类型，既有安全风险也会拖慢构建，直接判 typeof 即可
+  return typeof text === 'string'
 }
 
 export const hidePhone = (phone) => {

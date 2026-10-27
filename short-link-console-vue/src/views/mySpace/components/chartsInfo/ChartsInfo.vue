@@ -4,12 +4,14 @@
     direction="rtl"
     size="880px"
     :show-close="false"
+    @opened="handleOpened"
     @close="handleClose"
   >
     <template #header>
       <div class="stats-drawer-header">
         <div class="stats-drawer-title">
-          <img v-if="!isGroup" :src="getImgUrl(props.favicon)" width="28" height="28" class="stats-favicon" alt="" />
+          <img v-if="!isGroup" :src="getImgUrl(props.favicon)" width="28" height="28" class="stats-favicon" alt=""
+            referrerpolicy="no-referrer" @error="onFaviconError" />
           <div class="stats-title-text">
             <span class="stats-title">统计报表 - {{ props.title }}</span>
             <span v-if="!isGroup" class="stats-links">
@@ -116,8 +118,8 @@
                   <div v-if="index <= 9" class="key-value">
                     <span class="kv-rank">{{ index + 1 }}</span>
                     <span class="kv-name">{{ item.name }}</span>
-                    <span class="kv-bar"><span class="kv-bar-fill" :style="{ width: (item.ratio * 100) + '%' }"></span></span>
-                    <span class="kv-ratio">{{ (item.ratio * 100).toFixed(2) }}%</span>
+                    <span class="kv-bar"><span class="kv-bar-fill" :style="{ width: clampPct(item.ratio) + '%' }"></span></span>
+                    <span class="kv-ratio">{{ clampPct(item.ratio).toFixed(2) }}%</span>
                     <span class="kv-count">{{ item.value }}次</span>
                   </div>
                 </div>
@@ -146,7 +148,7 @@
                 <span class="stats-card-title">高频访问IP</span>
               </div>
               <div class="stats-card-body">
-                <KeyValue :dataLists="props.info?.topIpStats" style="height: 200px"></KeyValue>
+                <KeyValue :dataLists="props.info?.topIpStats" style="min-height: 200px"></KeyValue>
               </div>
             </div>
             <div class="stats-card">
@@ -169,7 +171,7 @@
                 <span class="stats-card-title">操作系统</span>
               </div>
               <div class="stats-card-body">
-                <ProgressLine style="height: 200px" :dataLists="props.info?.osStats"></ProgressLine>
+                <ProgressLine style="min-height: 200px" :dataLists="props.info?.osStats"></ProgressLine>
               </div>
             </div>
             <div class="stats-card">
@@ -177,7 +179,7 @@
                 <span class="stats-card-title">访问浏览器</span>
               </div>
               <div class="stats-card-body">
-                <ProgressLine style="height: 200px" :dataLists="props.info?.browserStats"></ProgressLine>
+                <ProgressLine style="min-height: 200px" :dataLists="props.info?.browserStats"></ProgressLine>
               </div>
             </div>
           </div>
@@ -191,7 +193,7 @@
               <div class="stats-card-body stats-pie-body">
                 <div class="pie-chart" ref="pieUserTypeRef"></div>
                 <div class="pie-legend">
-                  <div class="legend-item" v-for="(item, i) in userTypeLegend" :key="i">
+                  <div class="legend-item" v-for="item in userTypeLegend" :key="item.name">
                     <span class="legend-dot" :style="{ background: item.color }"></span>
                     <span class="legend-label">{{ item.name }}</span>
                     <span class="legend-value">{{ item.value }}</span>
@@ -207,7 +209,7 @@
               <div class="stats-card-body stats-pie-body">
                 <div class="pie-chart" ref="pieNetworkRef"></div>
                 <div class="pie-legend">
-                  <div class="legend-item" v-for="(item, i) in networkLegend" :key="i">
+                  <div class="legend-item" v-for="item in networkLegend" :key="item.name">
                     <span class="legend-dot" :style="{ background: item.color }"></span>
                     <span class="legend-label">{{ item.name }}</span>
                     <span class="legend-value">{{ item.value }}</span>
@@ -223,7 +225,7 @@
               <div class="stats-card-body stats-pie-body">
                 <div class="pie-chart" ref="pieDeviceRef"></div>
                 <div class="pie-legend">
-                  <div class="legend-item" v-for="(item, i) in deviceLegend" :key="i">
+                  <div class="legend-item" v-for="item in deviceLegend" :key="item.name">
                     <span class="legend-dot" :style="{ background: item.color }"></span>
                     <span class="legend-label">{{ item.name }}</span>
                     <span class="legend-value">{{ item.value }}</span>
@@ -240,7 +242,7 @@
               <span class="stats-card-title">访问记录</span>
             </div>
             <div class="stats-card-body" style="padding: 0">
-              <el-table :data="tableInfo?.data?.data?.records" style="width: 100%" :header-cell-style="{ background: '#f8f9fc', color: '#606266' }">
+              <el-table ref="accessTableRef" :data="tableInfo?.data?.data?.records" style="width: 100%" :header-cell-style="{ background: '#f8f9fc', color: '#606266' }">
                 <el-table-column prop="createTime" label="访问时间" width="160" />
                 <el-table-column prop="ip" label="访问IP" width="140" />
                 <el-table-column prop="locale" label="访客地区" />
@@ -277,7 +279,7 @@
 </template>
 
 <script setup>
-import { ref, watch, reactive, nextTick } from 'vue'
+import { ref, watch, reactive, nextTick, onMounted, onBeforeUnmount } from 'vue'
 import { ElMessage } from 'element-plus'
 import html2canvas from 'html2canvas'
 import TitleContent from './TitleContent.vue'
@@ -348,9 +350,17 @@ const shortcuts = [
 const getImgUrl = (url) => {
   return url ?? defaultImg
 }
+// 第三方 favicon 可能 403（防盗链），加载失败回落到默认图标
+const onFaviconError = (e) => {
+  const img = e.target
+  if (!img || img.dataset.fallback) return
+  img.dataset.fallback = '1'
+  img.src = defaultImg
+}
 const dailyXAxis = ref()
 // const dailyXAxis = ref([])
 const showPane = ref('访问数据')
+const accessTableRef = ref()
 // 浏览器
 const getUrl1 = (img) => {
   if (img) {
@@ -480,6 +490,8 @@ watch(
   (newValue) => {
     if (newValue === '历史记录') {
       emit('loadAccessRecords')
+      // 面板从 v-show 隐藏切到显示时表格宽度还是 0，需要重新布局，否则整张表不可见
+      nextTick(() => accessTableRef.value?.doLayout?.())
     }
   }
 )
@@ -524,6 +536,11 @@ const chinaMapData = ref([
   //   value: 0
   // }
 ])
+// 后端返回的 ratio 已经是 0-100 的百分比，前端不再二次乘 100，仅做边界兜底
+const clampPct = (v) => Math.min(Math.max(Number(v) || 0, 0), 100)
+// 归一化省份名，对齐 ECharts china 地图命名（去掉省/市/自治区/特别行政区等后缀）
+const normalizeProvince = (name) =>
+  String(name || '').replace(/(维吾尔自治区|壮族自治区|回族自治区|特别行政区|自治区|省|市)$/, '')
 // 中国地图中的总次数
 const chinaTotalNum = ref(0)
 // 将请求到的数据转化为中国地图中需要的数据结构
@@ -531,12 +548,10 @@ watch(
   () => props.info?.localeCnStats,
   () => {
     chinaTotalNum.value = 0
-    chinaMapData.value = props.info?.localeCnStats.map((item) => {
-      let { cnt, locale, ratio } = item
-      locale = locale.replace('省', '')
-      locale = locale.replace('市', '')
+    chinaMapData.value = (props.info?.localeCnStats || []).map((item) => {
+      const { cnt, locale, ratio } = item
       chinaTotalNum.value += cnt
-      return { name: locale, value: cnt, ratio }
+      return { name: normalizeProvince(locale), value: cnt, ratio }
     })
     initChinaMap()
   },
@@ -555,8 +570,9 @@ const isChina = ref(true)
 const initChinaMap = () => {
   // 中国地图
   const chinaMapDom = document.querySelector('.chinaMap')
-  // console.log('sdfsdfsdfsdf', chinaMapDom)
-  const chinaMap = echarts.init(chinaMapDom)
+  // 抽屉首次打开时内容区可能还没渲染，取不到容器就直接返回，避免 init 抛错中断后续图表
+  if (!chinaMapDom) return
+  const chinaMap = keepChart(echarts.getInstanceByDom(chinaMapDom) || echarts.init(chinaMapDom))
   const option = {
     tooltip: {
       formatter: function (params) {
@@ -817,7 +833,8 @@ let nameMap = {
 const initWorldMap = () => {
   // 世界地图
   const worldMapDom = document.querySelector('.worldMap')
-  const worldMap = echarts.init(worldMapDom)
+  if (!worldMapDom) return
+  const worldMap = keepChart(echarts.getInstanceByDom(worldMapDom) || echarts.init(worldMapDom))
   const option = {
     tooltip: {
       formatter: '{b0}: {c0}'
@@ -860,14 +877,57 @@ const initMap = () => {
 // 访问次数相关
 const isLine = ref(true)
 // 访问曲线数据请求
+// 图表无数据时的统一占位提示
+const EMPTY_TEXT = '所选日期内没有访问数据'
+const emptyGraphic = (show) =>
+  show
+    ? [
+        {
+          type: 'text',
+          left: 'center',
+          top: 'middle',
+          silent: true,
+          style: { text: EMPTY_TEXT, fill: '#ababab', fontSize: 13 }
+        }
+      ]
+    : []
+// 统一登记 ECharts 实例：复用已有实例，卸载时统一释放，避免反复 init 造成内存泄漏
+const chartInstances = new Set()
+const keepChart = (chart) => {
+  if (chart) chartInstances.add(chart)
+  return chart
+}
+// 窗口尺寸变化时统一重绘（原实现没有任何 resize 处理，窗口缩放后图表会错位）
+let resizeTimer = null
+const handleResize = () => {
+  clearTimeout(resizeTimer)
+  resizeTimer = setTimeout(() => {
+    chartInstances.forEach((chart) => {
+      if (chart && !chart.isDisposed()) chart.resize()
+    })
+  }, 150)
+}
+onMounted(() => window.addEventListener('resize', handleResize))
+onBeforeUnmount(() => {
+  window.removeEventListener('resize', handleResize)
+  clearTimeout(resizeTimer)
+  chartInstances.forEach((chart) => {
+    if (chart && !chart.isDisposed()) chart.dispose()
+  })
+  chartInstances.clear()
+})
 const initLineChart = () => {
   const lineChartDom = document.querySelector('.lineChart')
-  const lineChart = echarts.init(lineChartDom)
+  if (!lineChartDom) return
+  // 切换日期区间会反复触发重绘，复用已有实例避免重复 init
+  const lineChart = keepChart(echarts.getInstanceByDom(lineChartDom) || echarts.init(lineChartDom))
+  const isEmpty = !pvList.value.length || totalPv.value === 0
   let option = {
     title: {
       show: false,
       text: 'Stacked Line'
     },
+    graphic: emptyGraphic(isEmpty),
     tooltip: {
       trigger: 'axis'
     },
@@ -953,7 +1013,26 @@ const visitsData = ref()
 // 访问设备和访问网络
 const userTypeList = ref([0, 0])
 const deviceList = ref([0, 0])
+const deviceLabels = ref(['电脑', '移动设备'])
 const netWorkList = ref([0, 0])
+const networkLabels = ref(['WIFI', '移动数据'])
+// 后端返回的是多分类明细（PC/手机/平板、WIFI/4G/5G），饼图按界面口径归并；
+// 归并不进去的值单独成一片，保证各片之和与总访问次数一致
+const groupCounts = (list, key, groups) => {
+  const data = groups.map(() => 0)
+  let other = 0
+  ;(list || []).forEach((item) => {
+    const name = String(item?.[key] ?? '')
+    const cnt = Number(item?.cnt) || 0
+    const idx = groups.findIndex((names) => names.includes(name))
+    if (idx >= 0) {
+      data[idx] += cnt
+    } else {
+      other += cnt
+    }
+  })
+  return { data, other }
+}
 watch(
   () => props.info?.uvTypeStats,
   () => {
@@ -975,15 +1054,17 @@ watch(
 watch(
   () => props.info?.deviceStats,
   () => {
-    deviceList.value = [0, 0]
-    // 对访问设备类型的数据进行转化
-    props.info?.deviceStats?.forEach((item) => {
-      if (item.device === 'Mobile') {
-        deviceList.value[1] = item.cnt
-      } else {
-        deviceList.value[0] = item.cnt
-      }
-    })
+    const { data, other } = groupCounts(props.info?.deviceStats, 'device', [
+      ['PC', '电脑'],
+      ['手机', '平板', 'Mobile', 'Tablet']
+    ])
+    const labels = ['电脑', '移动设备']
+    if (other > 0) {
+      data.push(other)
+      labels.push('未知设备')
+    }
+    deviceList.value = data
+    deviceLabels.value = labels
   },
   {
     immediate: true
@@ -992,15 +1073,17 @@ watch(
 watch(
   () => props.info?.networkStats,
   () => {
-    netWorkList.value = [0, 0]
-    // 对访问设备类型的数据进行转化
-    props.info?.networkStats?.forEach((item) => {
-      if (item.device === 'Mobile') {
-        netWorkList.value[1] = item.cnt
-      } else {
-        netWorkList.value[0] = item.cnt
-      }
-    })
+    const { data, other } = groupCounts(props.info?.networkStats, 'network', [
+      ['WIFI'],
+      ['4G', '5G', '3G', '2G', 'Mobile']
+    ])
+    const labels = ['WIFI', '移动数据']
+    if (other > 0) {
+      data.push(other)
+      labels.push('未知网络')
+    }
+    netWorkList.value = data
+    networkLabels.value = labels
   },
   {
     immediate: true
@@ -1017,24 +1100,50 @@ const deviceLegend = ref([])
 
 const initPieChart = (dom, data, labels) => {
   if (!dom) return
-  const total = data.reduce((a, b) => a + b, 0) || 1
-  const chart = echarts.init(dom)
-  chart.setOption({
-    tooltip: { trigger: 'item', formatter: '{b}: {c} ({d}%)' },
-    color: PIE_COLORS,
-    series: [{
-      type: 'pie',
-      radius: ['50%', '75%'],
-      avoidLabelOverlap: false,
-      label: { show: false },
-      emphasis: {
-        label: { show: true, fontSize: 14, fontWeight: 'bold' },
-        itemStyle: { shadowBlur: 10, shadowOffsetX: 0, shadowColor: 'rgba(0,0,0,0.5)' }
-      },
-      data: labels.map((name, i) => ({ name, value: data[i] || 0 }))
-    }]
-  })
+  const sum = data.reduce((a, b) => a + (Number(b) || 0), 0)
+  // 复用实例，切换日期区间时不重复 init
+  const chart = keepChart(echarts.getInstanceByDom(dom) || echarts.init(dom))
+  chart.setOption(
+    {
+      graphic: emptyGraphic(sum === 0),
+      tooltip: { trigger: 'item', formatter: '{b}: {c} ({d}%)' },
+      color: PIE_COLORS,
+      series: [
+        {
+          type: 'pie',
+          radius: ['50%', '75%'],
+          avoidLabelOverlap: false,
+          label: { show: false },
+          emphasis: {
+            label: { show: true, fontSize: 14, fontWeight: 'bold' },
+            itemStyle: { shadowBlur: 10, shadowOffsetX: 0, shadowColor: 'rgba(0,0,0,0.5)' }
+          },
+          data: labels.map((name, i) => ({ name, value: data[i] || 0 }))
+        }
+      ]
+    },
+    true
+  )
   return chart
+}
+
+// 抽屉展开动画结束后统一补渲染一次：内容区在动画期间宽度接近 0，
+// 此时初始化的图表会得到 0×0 画布（有数据也看不见），这里统一重绘 + resize
+const handleOpened = () => {
+  nextTick(() => {
+    initLineChart()
+    if (isChina.value) {
+      initChinaMap()
+    } else {
+      initWorldMap()
+    }
+    initPieChart(pieUserTypeRef.value, userTypeList.value, ['新访客', '旧访客'])
+    initPieChart(pieNetworkRef.value, netWorkList.value, networkLabels.value)
+    initPieChart(pieDeviceRef.value, deviceList.value, deviceLabels.value)
+    chartInstances.forEach((chart) => {
+      if (chart && !chart.isDisposed()) chart.resize()
+    })
+  })
 }
 
 watch(
@@ -1052,10 +1161,10 @@ watch(
   { immediate: true }
 )
 watch(
-  () => [netWorkList.value, drawerVisible.value],
+  () => [netWorkList.value, networkLabels.value, drawerVisible.value],
   () => {
     if (!drawerVisible.value || !pieNetworkRef.value) return
-    const labels = ['WIFI', '移动数据']
+    const labels = networkLabels.value
     const data = netWorkList.value
     const total = data.reduce((a, b) => a + b, 0) || 1
     networkLegend.value = labels.map((name, i) => ({
@@ -1066,10 +1175,10 @@ watch(
   { immediate: true }
 )
 watch(
-  () => [deviceList.value, drawerVisible.value],
+  () => [deviceList.value, deviceLabels.value, drawerVisible.value],
   () => {
     if (!drawerVisible.value || !pieDeviceRef.value) return
-    const labels = ['电脑', '移动设备']
+    const labels = deviceLabels.value
     const data = deviceList.value
     const total = data.reduce((a, b) => a + b, 0) || 1
     deviceLegend.value = labels.map((name, i) => ({
@@ -1525,9 +1634,12 @@ const refreshData = () => {
 }
 
 .top10-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 200px;
   font-size: 13px;
-  color: #86909c;
-  padding: 12px 0;
+  color: #ababab;
 }
 
 .top10-item {

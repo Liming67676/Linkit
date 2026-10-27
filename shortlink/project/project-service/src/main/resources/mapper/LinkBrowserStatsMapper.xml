@@ -15,12 +15,10 @@
             WHERE full_short_url = #{fullShortUrl}
               AND date BETWEEN #{start} AND #{end}
               AND del_flag = 0
-              AND browser != '未知浏览器'
         ) t2
         WHERE t1.full_short_url = #{fullShortUrl}
           AND t1.date BETWEEN #{start} AND #{end}
           AND t1.del_flag = 0
-          AND t1.browser != '未知浏览器'
         GROUP BY t1.browser
         ORDER BY total_cnt DESC
     </select>
@@ -41,7 +39,6 @@
             </foreach>
               AND date BETWEEN #{start} AND #{end}
               AND del_flag = 0
-              AND browser != '未知浏览器'
         ) t2
         WHERE t1.full_short_url IN
         <foreach collection="fullShortUrls" item="url" open="(" separator="," close=")">
@@ -49,7 +46,6 @@
         </foreach>
           AND t1.date BETWEEN #{start} AND #{end}
           AND t1.del_flag = 0
-          AND t1.browser != '未知浏览器'
         GROUP BY t1.browser
         ORDER BY total_cnt DESC
     </select>

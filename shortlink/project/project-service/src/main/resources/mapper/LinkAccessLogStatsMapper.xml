@@ -20,26 +20,63 @@
         LIMIT 10
     </select>
 
-    <!-- 基于时间段动态判断新老访客统计（按独立IP去重） -->
-    <!-- 新用户：在查询时段内有访问，且之前从未访问过的独立IP -->
-    <!-- 老用户：在查询时段内有访问，且在查询开始前有过访问记录的独立IP -->
+    <!-- 新老访客：按「访问次数」口径统计，与 PV 一致；该 IP 首次出现时间早于区间起点即为老访客 -->
     <select id="findUvTypeCntByShortLink" resultType="java.util.Map">
         SELECT
-            COUNT(DISTINCT CASE WHEN pre.ip IS NULL THEN cur.ip END) AS newUserCnt,
-            COUNT(DISTINCT CASE WHEN pre.ip IS NOT NULL THEN cur.ip END) AS oldUserCnt
-        FROM (
-            SELECT DISTINCT ip
-            FROM t_link_access_log_stats
-            WHERE full_short_url = #{fullShortUrl}
-              AND create_time >= #{start}
-              AND create_time <![CDATA[ <= ]]> DATE_ADD(#{end}, INTERVAL 1 DAY)
-        ) cur
+            COUNT(CASE WHEN f.first_ct IS NULL OR f.first_ct &gt;= #{start} THEN 1 END) AS newUserCnt,
+            COUNT(CASE WHEN f.first_ct &lt; #{start} THEN 1 END) AS oldUserCnt
+        FROM t_link_access_log_stats l
         LEFT JOIN (
-            SELECT DISTINCT ip
+            SELECT ip, MIN(create_time) AS first_ct
             FROM t_link_access_log_stats
             WHERE full_short_url = #{fullShortUrl}
-              AND create_time &lt; #{start}
-        ) pre ON cur.ip = pre.ip
+            GROUP BY ip
+        ) f ON f.ip = l.ip
+        WHERE l.full_short_url = #{fullShortUrl}
+          AND l.create_time &gt;= #{start}
+          AND l.create_time &lt; DATE_ADD(#{end}, INTERVAL 1 DAY)
+    </select>
+
+    <!-- 区间内去重访客数：小时表里的 uv/uip 是增量值，直接按区间累加会重复计算同一访客 -->
+    <select id="countDistinctVisitor" resultType="java.util.Map">
+        SELECT
+            COUNT(DISTINCT user) AS uv,
+            COUNT(DISTINCT ip) AS uip
+        FROM t_link_access_log_stats
+        WHERE full_short_url = #{fullShortUrl}
+          AND create_time &gt;= #{start}
+          AND create_time &lt; DATE_ADD(#{end}, INTERVAL 1 DAY)
+    </select>
+
+    <!-- 批量：区间内访客明细。跨分片 COUNT(DISTINCT) 的合并结果不可靠（实测返回字符串且按分片汇总），
+         这里只做 (短链接, 访客, IP) 分组，由上层用 Set 去重计数，结果精确且只传输去重后的行 -->
+    <select id="countDistinctVisitorBatch" resultType="java.util.Map">
+        SELECT
+            full_short_url,
+            user,
+            ip
+        FROM t_link_access_log_stats
+        WHERE full_short_url IN
+        <foreach collection="fullShortUrls" item="url" open="(" separator="," close=")">
+            #{url}
+        </foreach>
+          AND create_time &gt;= #{start}
+          AND create_time &lt; DATE_ADD(#{end}, INTERVAL 1 DAY)
+        GROUP BY full_short_url, user, ip
+    </select>
+
+    <!-- 列表页：一页链接的访客明细（全量口径），同样在内存里按 Set 去重 -->
+    <select id="selectPageDistinctVisitor" resultType="java.util.Map">
+        SELECT
+            full_short_url,
+            user,
+            ip
+        FROM t_link_access_log_stats
+        WHERE full_short_url IN
+        <foreach collection="fullShortUrls" item="url" open="(" separator="," close=")">
+            #{url}
+        </foreach>
+        GROUP BY full_short_url, user, ip
     </select>
 
     <!-- 批量查询高频访问IP Top10 -->
@@ -71,42 +108,27 @@
         LIMIT 10
     </select>
 
-    <!-- 批量查询新老访客统计（基于时间段动态判断，按独立IP去重） -->
+    <!-- 批量新老访客：按访问次数统计；关联键必须带上 full_short_url，否则不同链接的相同 IP 会串味 -->
     <select id="findUvTypeCntByShortLinks" resultType="java.util.Map">
         SELECT
-            COUNT(DISTINCT CASE WHEN pre.ip IS NULL THEN cur.ip END) AS newUserCnt,
-            COUNT(DISTINCT CASE WHEN pre.ip IS NOT NULL THEN cur.ip END) AS oldUserCnt
-        FROM (
-            SELECT DISTINCT ip
-            FROM t_link_access_log_stats
-            WHERE
-            <if test="fullShortUrls != null and fullShortUrls.size() > 0">
-                full_short_url IN
-                <foreach collection="fullShortUrls" item="url" open="(" separator="," close=")">
-                    #{url}
-                </foreach>
-            </if>
-            <if test="fullShortUrls == null or fullShortUrls.size() == 0">
-                1=0
-            </if>
-              AND create_time >= #{start}
-              AND create_time <![CDATA[ <= ]]> DATE_ADD(#{end}, INTERVAL 1 DAY)
-        ) cur
+            COUNT(CASE WHEN f.first_ct IS NULL OR f.first_ct &gt;= #{start} THEN 1 END) AS newUserCnt,
+            COUNT(CASE WHEN f.first_ct &lt; #{start} THEN 1 END) AS oldUserCnt
+        FROM t_link_access_log_stats l
         LEFT JOIN (
-            SELECT DISTINCT ip
+            SELECT full_short_url, ip, MIN(create_time) AS first_ct
             FROM t_link_access_log_stats
-            WHERE
-            <if test="fullShortUrls != null and fullShortUrls.size() > 0">
-                full_short_url IN
-                <foreach collection="fullShortUrls" item="url" open="(" separator="," close=")">
-                    #{url}
-                </foreach>
-            </if>
-            <if test="fullShortUrls == null or fullShortUrls.size() == 0">
-                1=0
-            </if>
-              AND create_time &lt; #{start}
-        ) pre ON cur.ip = pre.ip
+            WHERE full_short_url IN
+            <foreach collection="fullShortUrls" item="url" open="(" separator="," close=")">
+                #{url}
+            </foreach>
+            GROUP BY full_short_url, ip
+        ) f ON f.ip = l.ip AND f.full_short_url = l.full_short_url
+        WHERE l.full_short_url IN
+        <foreach collection="fullShortUrls" item="url" open="(" separator="," close=")">
+            #{url}
+        </foreach>
+          AND l.create_time &gt;= #{start}
+          AND l.create_time &lt; DATE_ADD(#{end}, INTERVAL 1 DAY)
     </select>
 
 

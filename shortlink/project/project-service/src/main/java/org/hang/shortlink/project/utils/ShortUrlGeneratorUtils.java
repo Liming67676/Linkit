@@ -1,6 +1,7 @@
 package org.hang.shortlink.project.utils;
 
 import cn.hutool.core.lang.UUID;
+import cn.hutool.core.util.StrUtil;
 import com.google.common.hash.Hashing;
 import lombok.RequiredArgsConstructor;
 import org.hang.shortlink.project.constant.ShorUriConstant;
@@ -25,26 +26,34 @@ public class ShortUrlGeneratorUtils {
             "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz".toCharArray();
     private static final int BASE = CHARS.length;
 
+    // 短码固定长度：32 位哈希 Base62 编码最长 6 位，此处只补位不截断
+    private static final int SHORT_CODE_LENGTH = 6;
+
     // 1. 使用 32 位 MurmurHash 计算哈希值
     public  int hash(String url) {
         // 得到一个 32 位的 long 值
         return Hashing.murmur3_32_fixed().hashString(url, StandardCharsets.UTF_8).asInt();
     }
+
     // 使用 32 位 MurmurHash 带盐值计算哈希值,重复时使用
     private  int hashWithSalt(String url, String salt) {
         return Hashing.murmur3_32_fixed().hashString(url + salt, StandardCharsets.UTF_8).asInt();
     }
 
-    // 2. 将 10 进制长整型转 Base62
+    // 2. 将 10 进制长整型转 Base62（固定 6 位，不足左侧补 0）
     public  String encodeToBase62(int hash32) {
         long num = Integer.toUnsignedLong(hash32);
+        // 0 的 Base62 表示就是 "0"，补位后与其它分支保持一致
+        if (num == 0) {
+            return StrUtil.padPre("0", SHORT_CODE_LENGTH, '0');
+        }
         StringBuilder sb = new StringBuilder();
         while (num > 0) {
             int remainder = (int) (num % BASE);
             sb.append(CHARS[remainder]);
             num /= BASE;
         }
-        return sb.reverse().toString();
+        return StrUtil.padPre(sb.reverse().toString(), SHORT_CODE_LENGTH, '0');
     }
 
     // 3. 对外统一调用方法
